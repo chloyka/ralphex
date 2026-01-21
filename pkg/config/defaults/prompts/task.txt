@@ -25,8 +25,8 @@ STEP 2 - VALIDATE:
 - Fix any failures, repeat until all validation passes
 
 STEP 3 - COMPLETE (after validation passes):
-- Edit the plan file: change [ ] to [x] for ALL checkboxes in this section
-- Commit all changes with message: feat: <brief task description>
+- Update progress: edit {{PLAN_FILE}} and change [ ] to [x] for each checkbox you implemented in the current Task section
+- Commit all changes (code + updated plan) with message: feat: <brief task description>
 - Check if any [ ] checkboxes remain in other sections
 - If NO more [ ] checkboxes in the entire plan, output exactly: <<<RALPHEX:ALL_TASKS_DONE>>>
 - If more sections have [ ] checkboxes, STOP HERE - do not continue

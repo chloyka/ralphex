@@ -17,10 +17,17 @@ Codex (GPT-5.2) reviewed the code and found:
 
 ## Your Task
 
-Analyze each finding critically:
+Analyze each finding critically. For EACH issue:
 
-1. **Valid issues**: Fix them (edit files, run tests/linter to verify)
-2. **Invalid/irrelevant issues**: Explain why they don't apply - your explanation will be passed to Codex for re-evaluation
+1. Read the code at the reported location and trace the flow - find callers, see what functions it calls, understand the full context
+2. Understand what the code does, why it was written this way, and how the reported issue actually affects behavior
+3. Check {{PLAN_FILE}} - was this an intentional design decision?
+4. Assess the actual impact - is this a real problem or a style preference?
+
+Then categorize:
+
+- **Valid issues**: Fix them (edit files, run tests/linter to verify)
+- **Invalid/irrelevant issues**: Explain why they don't apply (intentional design, already mitigated, misunderstood context) - your explanation will be passed to Codex for re-evaluation
 
 IMPORTANT: Pre-existing issues (linter errors, failed tests) should also be fixed.
 Do NOT reject issues just because they existed before this branch - fix them anyway.
