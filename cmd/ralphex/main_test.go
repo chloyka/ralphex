@@ -11,13 +11,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/umputun/ralphex/pkg/config"
 	"github.com/umputun/ralphex/pkg/git"
 	"github.com/umputun/ralphex/pkg/progress"
 )
 
 // testColors returns a Colors instance for testing.
 func testColors() *progress.Colors {
-	return progress.NewColors(progress.ColorConfig{
+	return progress.NewColors(config.ColorConfig{
 		Task:       "0,255,0",
 		Review:     "0,255,255",
 		Codex:      "255,0,255",

@@ -13,6 +13,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 	"golang.org/x/term"
+
+	"github.com/umputun/ralphex/pkg/config"
 )
 
 // Phase represents execution phase for color coding.
@@ -26,22 +28,8 @@ const (
 	PhaseClaudeEval Phase = "claude-eval" // claude evaluating codex (bright cyan)
 )
 
-// ColorConfig holds RGB values for output colors.
-// each field stores comma-separated RGB values (e.g., "255,0,0" for red).
-type ColorConfig struct {
-	Task       string // task execution phase
-	Review     string // review phase
-	Codex      string // codex external review
-	ClaudeEval string // claude evaluation of codex output
-	Warn       string // warning messages
-	Error      string // error messages
-	Signal     string // completion/failure signals
-	Timestamp  string // timestamp prefix
-	Info       string // informational messages (used in main.go)
-}
-
 // Colors holds all color configuration for output formatting.
-// use NewColors to create from ColorConfig.
+// use NewColors to create from config.ColorConfig.
 type Colors struct {
 	task       *color.Color
 	review     *color.Color
@@ -55,10 +43,10 @@ type Colors struct {
 	phases     map[Phase]*color.Color
 }
 
-// NewColors creates Colors from ColorConfig.
+// NewColors creates Colors from config.ColorConfig.
 // all colors must be provided - use config with embedded defaults fallback.
 // panics if any color value is invalid (configuration error).
-func NewColors(cfg ColorConfig) *Colors {
+func NewColors(cfg config.ColorConfig) *Colors {
 	c := &Colors{phases: make(map[Phase]*color.Color)}
 	c.task = parseColorOrPanic(cfg.Task, "task")
 	c.review = parseColorOrPanic(cfg.Review, "review")

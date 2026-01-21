@@ -78,17 +78,7 @@ func run(ctx context.Context, o opts) error {
 	}
 
 	// create colors from config (all colors guaranteed populated via fallback)
-	colors := progress.NewColors(progress.ColorConfig{
-		Task:       cfg.Colors.Task,
-		Review:     cfg.Colors.Review,
-		Codex:      cfg.Colors.Codex,
-		ClaudeEval: cfg.Colors.ClaudeEval,
-		Warn:       cfg.Colors.Warn,
-		Error:      cfg.Colors.Error,
-		Signal:     cfg.Colors.Signal,
-		Timestamp:  cfg.Colors.Timestamp,
-		Info:       cfg.Colors.Info,
-	})
+	colors := progress.NewColors(cfg.Colors)
 
 	// check dependencies using configured command (or default "claude")
 	if depErr := checkClaudeDep(cfg); depErr != nil {

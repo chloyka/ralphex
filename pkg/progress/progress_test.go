@@ -10,11 +10,13 @@ import (
 	"github.com/fatih/color"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/umputun/ralphex/pkg/config"
 )
 
 // testColors returns a Colors instance for testing with valid RGB values.
 func testColors() *Colors {
-	return NewColors(ColorConfig{
+	return NewColors(config.ColorConfig{
 		Task:       "0,255,0",
 		Review:     "0,255,255",
 		Codex:      "255,0,255",
@@ -471,7 +473,7 @@ func TestFormatListItem(t *testing.T) {
 
 func TestNewColors(t *testing.T) {
 	t.Run("creates colors from valid config", func(t *testing.T) {
-		cfg := ColorConfig{
+		cfg := config.ColorConfig{
 			Task:       "0,255,0",
 			Review:     "0,255,255",
 			Codex:      "255,0,255",
@@ -496,7 +498,7 @@ func TestNewColors(t *testing.T) {
 	})
 
 	t.Run("panics on invalid task color", func(t *testing.T) {
-		cfg := ColorConfig{
+		cfg := config.ColorConfig{
 			Task:       "invalid",
 			Review:     "0,255,255",
 			Codex:      "255,0,255",
@@ -511,7 +513,7 @@ func TestNewColors(t *testing.T) {
 	})
 
 	t.Run("panics on empty color", func(t *testing.T) {
-		cfg := ColorConfig{
+		cfg := config.ColorConfig{
 			Task:       "",
 			Review:     "0,255,255",
 			Codex:      "255,0,255",
