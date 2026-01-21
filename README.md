@@ -1,6 +1,8 @@
 # ralphex [![build](https://github.com/umputun/ralphex/actions/workflows/ci.yml/badge.svg)](https://github.com/umputun/ralphex/actions/workflows/ci.yml) [![Coverage Status](https://coveralls.io/repos/github/umputun/ralphex/badge.svg?branch=master)](https://coveralls.io/github/umputun/ralphex?branch=master) [![Go Report Card](https://goreportcard.com/badge/github.com/umputun/ralphex)](https://goreportcard.com/report/github.com/umputun/ralphex)
 
-# Autonomous plan execution with Claude Code.
+## Autonomous plan execution with Claude Code
+
+*ralphex is a standalone CLI tool that runs in your terminal from the root of a git repository. It orchestrates Claude Code to execute implementation plans autonomously - no IDE plugins or cloud services required, just Claude Code and a single binary.*
 
 Claude Code is powerful but interactive - it requires you to watch, approve, and guide each step. For complex features spanning multiple tasks, this means hours of babysitting. Worse, as context fills up during long sessions, the model's quality degrades - it starts making mistakes, forgetting earlier decisions, and producing worse code.
 
@@ -316,6 +318,8 @@ On first run, ralphex creates this directory with default configuration.
 | `color_signal` | Completion/failure signals color (hex) | `#ff6464` |
 | `color_timestamp` | Timestamp prefix color (hex) | `#8a8a8a` |
 | `color_info` | Informational messages color (hex) | `#b4b4b4` |
+
+Colors use 24-bit RGB (true color), supported natively by all modern terminals (iTerm2, Kitty, Terminal.app, Windows Terminal, GNOME Terminal, Alacritty, Zed, VS Code, etc). Older terminals will degrade gracefully. Use `--no-color` to disable colors entirely.
 
 ### Custom prompts
 

@@ -18,8 +18,23 @@
     "allow_concurrent_runs": false
   },
   {
-    "label": "test: app package",
-    "command": "go test -race -v ./app/...",
+    "label": "e2e: full (prep)",
+    "command": "make e2e-prep",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "e2e: review (prep)",
+    "command": "make e2e-review",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "e2e: codex-only (prep)",
+    "command": "make e2e-codex",
+    "cwd": "$ZED_WORKTREE_ROOT",
     "use_new_terminal": true,
     "allow_concurrent_runs": false
   },

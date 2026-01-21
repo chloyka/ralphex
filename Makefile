@@ -35,4 +35,34 @@ version:
 install: build
 	sudo cp .bin/ralphex /usr/local/bin/ralphex
 
-.PHONY: all build test lint fmt race version install
+e2e-prep: build
+	@./scripts/prep-toy-test.sh
+	@cp .bin/ralphex /tmp/ralphex-test/.bin/ralphex
+	@echo ""
+	@echo "=== E2E Full Test Ready ==="
+	@echo "cd /tmp/ralphex-test"
+	@echo ".bin/ralphex docs/plans/fix-issues.md"
+	@echo ""
+	@echo "Monitor: tail -f /tmp/ralphex-test/progress-fix-issues.txt"
+
+e2e-review: build
+	@./scripts/prep-review-test.sh
+	@cp .bin/ralphex /tmp/ralphex-review-test/.bin/ralphex
+	@echo ""
+	@echo "=== E2E Review Test Ready ==="
+	@echo "cd /tmp/ralphex-review-test"
+	@echo ".bin/ralphex --review"
+	@echo ""
+	@echo "Monitor: tail -f /tmp/ralphex-review-test/progress-review.txt"
+
+e2e-codex: build
+	@./scripts/prep-review-test.sh
+	@cp .bin/ralphex /tmp/ralphex-review-test/.bin/ralphex
+	@echo ""
+	@echo "=== E2E Codex-Only Test Ready ==="
+	@echo "cd /tmp/ralphex-review-test"
+	@echo ".bin/ralphex --codex-only"
+	@echo ""
+	@echo "Monitor: tail -f /tmp/ralphex-review-test/progress-codex.txt"
+
+.PHONY: all build test lint fmt race version install e2e-prep e2e-review e2e-codex

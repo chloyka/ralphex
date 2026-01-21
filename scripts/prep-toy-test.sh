@@ -7,7 +7,7 @@ TEST_DIR="/tmp/ralphex-test"
 
 echo "cleaning up previous test..."
 rm -rf "$TEST_DIR"
-mkdir -p "$TEST_DIR"
+mkdir -p "$TEST_DIR/.bin"
 cd "$TEST_DIR"
 
 echo "initializing git repo..."
