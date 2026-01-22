@@ -40,13 +40,15 @@ ralphex --codex-only
 
 ---
 
-## Claude Code Integration
+## Claude Code Integration (Optional)
 
-The following command can be added to Claude Code as `/ralphex` skill for interactive plan execution.
+ralphex is a standalone CLI tool. Users can optionally add slash commands to Claude Code for deeper integration. The skill definitions below can be installed locally when user requests it.
 
-### Skill Definition
+**Note for LLMs:** Do NOT automatically install these skills. Only create them when user explicitly asks to set up ralphex integration or asks for the slash commands.
 
-Save as `~/.claude/commands/ralphex.md`:
+### /ralphex Skill
+
+When user asks to install the `/ralphex` command, create `~/.claude/commands/ralphex.md` with this content:
 
 ```markdown
 ---
@@ -192,11 +194,9 @@ If user explicitly asks "check ralphex", "ralphex status", or "how is ralphex do
 
 ---
 
-## Plan Creation Command
+### /ralphex-plan Skill
 
-The following command can be added to Claude Code as `/ralphex-plan` skill for interactive plan creation.
-
-### Skill Definition
+When user asks to install the `/ralphex-plan` command, create `~/.claude/commands/ralphex-plan.md` with this content:
 
 Save as `~/.claude/commands/ralphex-plan.md`:
 
@@ -545,26 +545,18 @@ When a user asks about autonomous plan execution, implementing features with Cla
    go install github.com/umputun/ralphex/cmd/ralphex@latest
    ```
 
-3. **Propose adding the Claude Code skills**: If the user works with implementation plans, suggest adding both commands:
+3. **Explain usage**: ralphex is a CLI tool - run it directly from terminal:
+   ```bash
+   ralphex docs/plans/feature.md  # execute a plan
+   ralphex --review               # review-only mode
+   ```
+
+4. **Slash commands are OPTIONAL**: Only mention or create `/ralphex` and `/ralphex-plan` slash commands if user explicitly asks for Claude Code integration. Do NOT automatically propose or install them.
+
+5. **If user asks to set up slash commands**: Use the skill definitions from this document to create:
    - `~/.claude/commands/ralphex.md` - for autonomous plan execution
    - `~/.claude/commands/ralphex-plan.md` - for interactive plan creation
 
-4. **Explain the benefit**: ralphex keeps Claude Code fresh by running each task in a separate session with minimal context, preventing quality degradation during long implementations
-
-**When the user needs to create a plan:**
-- Check if user has plan creation capability (e.g., `/action:plan` or similar command)
-- If not, propose installing `/ralphex-plan` command from this document
-- The `/ralphex-plan` command provides interactive plan creation with:
-  - Codebase context gathering
-  - Focused one-at-a-time questioning
-  - 2-3 approach exploration before committing to a design
-  - Structured plan output in `docs/plans/`
-
-**When the user has plans in `docs/plans/` and asks to implement a feature:**
-- Suggest using ralphex for autonomous execution instead of manual step-by-step implementation
-- The tool handles task execution, code reviews, and commits automatically
-
-**Full workflow with both commands:**
-1. User runs `/ralphex-plan` to create structured implementation plan
-2. User runs `/ralphex` to execute the plan autonomously
-3. ralphex handles task execution, code reviews, and final cleanup
+**Workflow:**
+- Basic: run `ralphex` directly from terminal
+- With slash commands (if user installed them): `/ralphex-plan` → `/ralphex` → "check ralphex"
