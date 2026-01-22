@@ -79,21 +79,27 @@ func TestPreparePlanFile(t *testing.T) {
 		planFile := filepath.Join(tmpDir, "test-plan.md")
 		require.NoError(t, os.WriteFile(planFile, []byte("# Test"), 0o600))
 
-		result, err := preparePlanFile(context.Background(), planFile, false, tmpDir, colors)
+		result, err := preparePlanFile(context.Background(), planSelector{
+			PlanFile: planFile, Optional: false, PlansDir: tmpDir, Colors: colors,
+		})
 		require.NoError(t, err)
 		assert.True(t, filepath.IsAbs(result))
 	})
 
 	t.Run("returns_error_for_missing_plan_in_task_mode", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		_, err := preparePlanFile(context.Background(), "", false, tmpDir, colors)
+		_, err := preparePlanFile(context.Background(), planSelector{
+			PlanFile: "", Optional: false, PlansDir: tmpDir, Colors: colors,
+		})
 		require.Error(t, err)
 		// error comes from selectPlanWithFzf when no .md files found
 		assert.Contains(t, err.Error(), "no plans found")
 	})
 
 	t.Run("returns_empty_for_review_mode_without_plan", func(t *testing.T) {
-		result, err := preparePlanFile(context.Background(), "", true, "", colors)
+		result, err := preparePlanFile(context.Background(), planSelector{
+			PlanFile: "", Optional: true, PlansDir: "", Colors: colors,
+		})
 		require.NoError(t, err)
 		assert.Empty(t, result)
 	})
@@ -143,19 +149,25 @@ func TestSelectPlan(t *testing.T) {
 		err := os.WriteFile(planFile, []byte("# Test Plan"), 0o600)
 		require.NoError(t, err)
 
-		result, err := selectPlan(context.Background(), planFile, false, tmpDir, colors)
+		result, err := selectPlan(context.Background(), planSelector{
+			PlanFile: planFile, Optional: false, PlansDir: tmpDir, Colors: colors,
+		})
 		require.NoError(t, err)
 		assert.Equal(t, planFile, result)
 	})
 
 	t.Run("returns error if plan file not found", func(t *testing.T) {
-		_, err := selectPlan(context.Background(), "/nonexistent/plan.md", false, "", colors)
+		_, err := selectPlan(context.Background(), planSelector{
+			PlanFile: "/nonexistent/plan.md", Optional: false, PlansDir: "", Colors: colors,
+		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "plan file not found")
 	})
 
 	t.Run("returns empty string for optional mode with no plan", func(t *testing.T) {
-		result, err := selectPlan(context.Background(), "", true, "", colors)
+		result, err := selectPlan(context.Background(), planSelector{
+			PlanFile: "", Optional: true, PlansDir: "", Colors: colors,
+		})
 		require.NoError(t, err)
 		assert.Empty(t, result)
 	})

@@ -35,6 +35,23 @@ type opts struct {
 
 var revision = "unknown"
 
+// startupInfo holds parameters for printing startup information.
+type startupInfo struct {
+	PlanFile      string
+	Branch        string
+	Mode          processor.Mode
+	MaxIterations int
+	ProgressPath  string
+}
+
+// planSelector holds parameters for plan file selection.
+type planSelector struct {
+	PlanFile string
+	Optional bool
+	PlansDir string
+	Colors   *progress.Colors
+}
+
 func main() {
 	fmt.Printf("ralphex %s\n", revision)
 
@@ -97,8 +114,12 @@ func run(ctx context.Context, o opts) error {
 	}
 
 	// select and prepare plan file
-	skipTasks := o.Review || o.CodexOnly
-	planFile, err := preparePlanFile(ctx, o.PlanFile, skipTasks, cfg.PlansDir, colors)
+	planFile, err := preparePlanFile(ctx, planSelector{
+		PlanFile: o.PlanFile,
+		Optional: o.Review || o.CodexOnly,
+		PlansDir: cfg.PlansDir,
+		Colors:   colors,
+	})
 	if err != nil {
 		return err
 	}
@@ -136,7 +157,10 @@ func run(ctx context.Context, o opts) error {
 	defer log.Close()
 
 	// print startup info
-	printStartupInfo(planFile, branch, mode, o.MaxIterations, log.Path(), colors)
+	printStartupInfo(startupInfo{
+		PlanFile: planFile, Branch: branch, Mode: mode,
+		MaxIterations: o.MaxIterations, ProgressPath: log.Path(),
+	}, colors)
 
 	// create and run the runner
 	r := createRunner(cfg, o, planFile, mode, log)
@@ -196,13 +220,13 @@ func createRunner(cfg *config.Config, o opts, planFile string, mode processor.Mo
 	}, log)
 }
 
-func preparePlanFile(ctx context.Context, planFile string, skipTasks bool, plansDir string, colors *progress.Colors) (string, error) {
-	selected, err := selectPlan(ctx, planFile, skipTasks, plansDir, colors)
+func preparePlanFile(ctx context.Context, sel planSelector) (string, error) {
+	selected, err := selectPlan(ctx, sel)
 	if err != nil {
 		return "", err
 	}
 	if selected == "" {
-		if !skipTasks {
+		if !sel.Optional {
 			return "", errors.New("plan file required for task execution")
 		}
 		return "", nil
@@ -215,21 +239,21 @@ func preparePlanFile(ctx context.Context, planFile string, skipTasks bool, plans
 	return abs, nil
 }
 
-func selectPlan(ctx context.Context, planFile string, optional bool, plansDir string, colors *progress.Colors) (string, error) {
-	if planFile != "" {
-		if _, err := os.Stat(planFile); err != nil {
-			return "", fmt.Errorf("plan file not found: %s", planFile)
+func selectPlan(ctx context.Context, sel planSelector) (string, error) {
+	if sel.PlanFile != "" {
+		if _, err := os.Stat(sel.PlanFile); err != nil {
+			return "", fmt.Errorf("plan file not found: %s", sel.PlanFile)
 		}
-		return planFile, nil
+		return sel.PlanFile, nil
 	}
 
 	// for review-only modes, plan is optional
-	if optional {
+	if sel.Optional {
 		return "", nil
 	}
 
 	// use fzf to select plan
-	return selectPlanWithFzf(ctx, plansDir, colors)
+	return selectPlanWithFzf(ctx, sel.PlansDir, sel.Colors)
 }
 
 func selectPlanWithFzf(ctx context.Context, plansDir string, colors *progress.Colors) (string, error) {
@@ -385,16 +409,16 @@ func checkDependencies(deps ...string) error {
 	return nil
 }
 
-func printStartupInfo(planFile, branch string, mode processor.Mode, maxIterations int, progressPath string, colors *progress.Colors) {
-	planStr := planFile
+func printStartupInfo(info startupInfo, colors *progress.Colors) {
+	planStr := info.PlanFile
 	if planStr == "" {
 		planStr = "(no plan - review only)"
 	}
 	modeStr := ""
-	if mode != processor.ModeFull {
-		modeStr = fmt.Sprintf(" (%s mode)", mode)
+	if info.Mode != processor.ModeFull {
+		modeStr = fmt.Sprintf(" (%s mode)", info.Mode)
 	}
-	colors.Info().Printf("starting ralphex loop: %s (max %d iterations)%s\n", planStr, maxIterations, modeStr)
-	colors.Info().Printf("branch: %s\n", branch)
-	colors.Info().Printf("progress log: %s\n\n", progressPath)
+	colors.Info().Printf("starting ralphex loop: %s (max %d iterations)%s\n", planStr, info.MaxIterations, modeStr)
+	colors.Info().Printf("branch: %s\n", info.Branch)
+	colors.Info().Printf("progress log: %s\n\n", info.ProgressPath)
 }
