@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ralphex Dashboard - {{.PlanName}}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <aside class="session-sidebar" id="session-sidebar">
+        <div class="sidebar-header">
+            <span class="sidebar-title">Sessions</span>
+            <div class="sidebar-controls">
+                <button class="view-toggle" id="view-toggle" title="Sorted by time (click to group by project)">
+                    <span class="view-icon">T</span>
+                </button>
+                <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar (S)">◀</button>
+            </div>
+        </div>
+        <div class="session-list" id="session-list">
+            <div class="session-loading">Loading sessions...</div>
+        </div>
+    </aside>
+
+    <div class="main-wrapper" id="main-wrapper">
+        <header>
+            <div class="header-top">
+                <h1>Ralphex Dashboard</h1>
+                <div class="status-area">
+                    <span class="elapsed-time" id="elapsed-time"></span>
+                    <span class="status-badge" id="status-badge"></span>
+                    <button class="export-btn" id="export-btn" title="Export session as HTML">Export</button>
+                </div>
+            </div>
+            <div class="info">
+                <span class="plan" id="plan-name" title="Plan">{{.PlanName}}</span>
+                <span class="branch" id="branch-name" title="Branch">{{.Branch}}</span>
+            </div>
+        </header>
+
+        <nav class="phase-nav">
+            <button class="phase-tab active" data-phase="all">All</button>
+            <button class="phase-tab" data-phase="task">Implementation</button>
+            <button class="phase-tab" data-phase="review">Claude Review</button>
+            <button class="phase-tab" data-phase="codex">Codex Review</button>
+            <span class="nav-separator"></span>
+            <button class="collapse-btn" id="expand-all" title="Expand all sections">Expand All</button>
+            <button class="collapse-btn" id="collapse-all" title="Collapse all sections">Collapse All</button>
+        </nav>
+
+        <div class="search-bar">
+            <input type="text" id="search" placeholder="Search... (press / to focus)" autocomplete="off">
+            <span class="search-hint">? for keyboard shortcuts</span>
+        </div>
+
+        <div class="main-container">
+            <aside class="plan-panel" id="plan-panel">
+                <div class="plan-panel-header">
+                    <span class="plan-panel-title">Plan</span>
+                    <button class="plan-toggle" id="plan-toggle" title="Toggle plan panel (P)">▶</button>
+                </div>
+                <div class="plan-content" id="plan-content">
+                    <div class="plan-loading">Loading plan...</div>
+                </div>
+            </aside>
+
+            <main class="output-panel">
+                <div id="output"></div>
+            </main>
+        </div>
+
+        <div class="scroll-indicator" id="scroll-indicator">
+            <button id="scroll-to-bottom">Scroll to bottom</button>
+        </div>
+    </div>
+
+    <div class="help-overlay" id="help-overlay">
+        <div class="help-modal">
+            <div class="help-header">
+                <span class="help-title">Keyboard Shortcuts</span>
+                <button class="help-close" id="help-close">×</button>
+            </div>
+            <div class="help-content">
+                <div class="help-section">
+                    <div class="help-section-title">Navigation</div>
+                    <div class="help-row"><kbd>j</kbd> <span>Next section</span></div>
+                    <div class="help-row"><kbd>k</kbd> <span>Previous section</span></div>
+                    <div class="help-row"><kbd>Space</kbd> <span>Toggle focused section</span></div>
+                    <div class="help-row"><kbd>Enter</kbd> <span>Toggle focused section</span></div>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title">Sections</div>
+                    <div class="help-row"><kbd>e</kbd> <span>Expand all sections</span></div>
+                    <div class="help-row"><kbd>c</kbd> <span>Collapse all sections</span></div>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title">Panels</div>
+                    <div class="help-row"><kbd>p</kbd> <span>Toggle plan panel</span></div>
+                    <div class="help-row"><kbd>s</kbd> <span>Toggle sessions sidebar</span></div>
+                    <div class="help-row"><kbd>t</kbd> <span>Sessions: sort by time</span></div>
+                    <div class="help-row"><kbd>g</kbd> <span>Sessions: group by project</span></div>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title">Search</div>
+                    <div class="help-row"><kbd>/</kbd> <span>Focus search</span></div>
+                    <div class="help-row"><kbd>Esc</kbd> <span>Clear search / close help</span></div>
+                </div>
+                <div class="help-section">
+                    <div class="help-section-title">Other</div>
+                    <div class="help-row"><kbd>?</kbd> <span>Show this help</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

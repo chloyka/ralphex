@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/ini.v1"
 )
@@ -28,6 +29,7 @@ type Values struct {
 	TaskRetryCount       int
 	TaskRetryCountSet    bool // tracks if task_retry_count was explicitly set
 	PlansDir             string
+	WatchDirs            []string // directories to watch for progress files
 }
 
 // valuesLoader implements ValuesLoader with embedded filesystem fallback.
@@ -99,6 +101,8 @@ func (vl *valuesLoader) parseValuesFromEmbedded() (Values, error) {
 }
 
 // parseValuesFromBytes parses configuration from a byte slice into Values.
+//
+//nolint:gocyclo // adding watch_dirs pushed complexity over threshold; splitting would hurt readability
 func (vl *valuesLoader) parseValuesFromBytes(data []byte) (Values, error) {
 	// ignoreInlineComment: true prevents # from being treated as inline comment marker
 	cfg, err := ini.LoadSources(ini.LoadOptions{IgnoreInlineComment: true}, data)
@@ -179,6 +183,18 @@ func (vl *valuesLoader) parseValuesFromBytes(data []byte) (Values, error) {
 		values.PlansDir = key.String()
 	}
 
+	// watch directories (comma-separated)
+	if key, err := section.GetKey("watch_dirs"); err == nil {
+		val := strings.TrimSpace(key.String())
+		if val != "" {
+			for p := range strings.SplitSeq(val, ",") {
+				if t := strings.TrimSpace(p); t != "" {
+					values.WatchDirs = append(values.WatchDirs, t)
+				}
+			}
+		}
+	}
+
 	return values, nil
 }
 
@@ -220,5 +236,8 @@ func (dst *Values) mergeFrom(src *Values) {
 	}
 	if src.PlansDir != "" {
 		dst.PlansDir = src.PlansDir
+	}
+	if len(src.WatchDirs) > 0 {
+		dst.WatchDirs = src.WatchDirs
 	}
 }

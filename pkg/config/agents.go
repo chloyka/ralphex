@@ -64,7 +64,7 @@ func (al *agentLoader) loadFromDir(agentsDir string) ([]CustomAgent, error) {
 		return nil, fmt.Errorf("read agents directory %s: %w", agentsDir, err)
 	}
 
-	var agents []CustomAgent
+	agents := make([]CustomAgent, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".txt") {
 			continue

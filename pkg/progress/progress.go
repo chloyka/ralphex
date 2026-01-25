@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -15,17 +16,20 @@ import (
 	"golang.org/x/term"
 
 	"github.com/umputun/ralphex/pkg/config"
+	"github.com/umputun/ralphex/pkg/processor"
 )
 
-// Phase represents execution phase for color coding.
-type Phase string
+// Phase is an alias to processor.Phase for backwards compatibility.
+//
+// Deprecated: use processor.Phase directly.
+type Phase = processor.Phase
 
-// Phase constants for execution stages.
+// Phase constants for execution stages - aliases to processor constants.
 const (
-	PhaseTask       Phase = "task"        // execution phase (green)
-	PhaseReview     Phase = "review"      // code review phase (cyan)
-	PhaseCodex      Phase = "codex"       // codex analysis phase (magenta)
-	PhaseClaudeEval Phase = "claude-eval" // claude evaluating codex (bright cyan)
+	PhaseTask       = processor.PhaseTask
+	PhaseReview     = processor.PhaseReview
+	PhaseCodex      = processor.PhaseCodex
+	PhaseClaudeEval = processor.PhaseClaudeEval
 )
 
 // Colors holds all color configuration for output formatting.
@@ -157,6 +161,14 @@ func NewLogger(cfg Config, colors *Colors) (*Logger, error) {
 		return nil, fmt.Errorf("create progress file: %w", err)
 	}
 
+	// acquire exclusive lock on progress file to signal active session
+	// the lock is held for the duration of execution and released on Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("acquire file lock: %w", err)
+	}
+	registerActiveLock(f.Name())
+
 	l := &Logger{
 		file:      f,
 		stdout:    os.Stdout,
@@ -219,9 +231,9 @@ func (l *Logger) PrintRaw(format string, args ...any) {
 }
 
 // PrintSection writes a section header without timestamp in yellow.
-// format: "\n--- {name} ---\n"
-func (l *Logger) PrintSection(name string) {
-	header := fmt.Sprintf("\n--- %s ---\n", name)
+// format: "\n--- {label} ---\n"
+func (l *Logger) PrintSection(section processor.Section) {
+	header := fmt.Sprintf("\n--- %s ---\n", section.Label)
 	l.writeFile("%s", header)
 	l.writeStdout("%s", l.colors.Warn().Sprint(header))
 }
@@ -424,7 +436,7 @@ func (l *Logger) Elapsed() string {
 	return humanize.RelTime(l.startTime, time.Now(), "", "")
 }
 
-// Close writes footer and closes the progress file.
+// Close writes footer, releases the file lock, and closes the progress file.
 func (l *Logger) Close() error {
 	if l.file == nil {
 		return nil
@@ -432,6 +444,10 @@ func (l *Logger) Close() error {
 
 	l.writeFile("\n%s\n", strings.Repeat("-", 60))
 	l.writeFile("Completed: %s (%s)\n", time.Now().Format("2006-01-02 15:04:05"), l.Elapsed())
+
+	// release file lock before closing
+	_ = syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN)
+	unregisterActiveLock(l.file.Name())
 
 	if err := l.file.Close(); err != nil {
 		return fmt.Errorf("close progress file: %w", err)

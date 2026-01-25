@@ -78,6 +78,12 @@ task_retry_count = 1
 # default: docs/plans
 plans_dir = docs/plans
 
+# watch_dirs: directories to watch for progress files in dashboard mode
+# comma-separated list of paths, relative paths resolved from project root
+# if not specified, defaults to current working directory
+# example: watch_dirs = /home/user/projects, /var/log/ralphex
+# watch_dirs =
+
 # ------------------------------------------------------------------------------
 # output colors (hex format: #RRGGBB)
 # ------------------------------------------------------------------------------

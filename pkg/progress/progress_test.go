@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/umputun/ralphex/pkg/config"
+	"github.com/umputun/ralphex/pkg/processor"
 )
 
 // testColors returns a Colors instance for testing with valid RGB values.
@@ -112,6 +113,28 @@ func TestLogger_PrintRaw(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "raw output")
 	assert.Contains(t, buf.String(), "raw output")
+}
+
+func TestLogger_PrintSection(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	require.NoError(t, os.Chdir(tmpDir))
+	defer func() { _ = os.Chdir(origDir) }()
+
+	l, err := NewLogger(Config{Mode: "full", Branch: "test", NoColor: true}, testColors())
+	require.NoError(t, err)
+	defer func() { _ = l.Close() }()
+
+	var buf bytes.Buffer
+	l.stdout = &buf
+
+	section := processor.NewGenericSection("test section")
+	l.PrintSection(section)
+
+	content, err := os.ReadFile(l.Path())
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "--- test section ---")
+	assert.Contains(t, buf.String(), "--- test section ---")
 }
 
 func TestLogger_PrintAligned(t *testing.T) {

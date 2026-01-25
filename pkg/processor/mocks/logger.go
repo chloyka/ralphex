@@ -6,7 +6,7 @@ package mocks
 import (
 	"sync"
 
-	"github.com/umputun/ralphex/pkg/progress"
+	"github.com/umputun/ralphex/pkg/processor"
 )
 
 // LoggerMock is a mock implementation of processor.Logger.
@@ -27,10 +27,10 @@ import (
 //			PrintRawFunc: func(format string, args ...any)  {
 //				panic("mock out the PrintRaw method")
 //			},
-//			PrintSectionFunc: func(name string)  {
+//			PrintSectionFunc: func(section processor.Section)  {
 //				panic("mock out the PrintSection method")
 //			},
-//			SetPhaseFunc: func(phase progress.Phase)  {
+//			SetPhaseFunc: func(phase processor.Phase)  {
 //				panic("mock out the SetPhase method")
 //			},
 //		}
@@ -53,10 +53,10 @@ type LoggerMock struct {
 	PrintRawFunc func(format string, args ...any)
 
 	// PrintSectionFunc mocks the PrintSection method.
-	PrintSectionFunc func(name string)
+	PrintSectionFunc func(section processor.Section)
 
 	// SetPhaseFunc mocks the SetPhase method.
-	SetPhaseFunc func(phase progress.Phase)
+	SetPhaseFunc func(phase processor.Phase)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -84,13 +84,13 @@ type LoggerMock struct {
 		}
 		// PrintSection holds details about calls to the PrintSection method.
 		PrintSection []struct {
-			// Name is the name argument value.
-			Name string
+			// Section is the section argument value.
+			Section processor.Section
 		}
 		// SetPhase holds details about calls to the SetPhase method.
 		SetPhase []struct {
 			// Phase is the phase argument value.
-			Phase progress.Phase
+			Phase processor.Phase
 		}
 	}
 	lockPath         sync.RWMutex
@@ -233,19 +233,19 @@ func (mock *LoggerMock) PrintRawCalls() []struct {
 }
 
 // PrintSection calls PrintSectionFunc.
-func (mock *LoggerMock) PrintSection(name string) {
+func (mock *LoggerMock) PrintSection(section processor.Section) {
 	if mock.PrintSectionFunc == nil {
 		panic("LoggerMock.PrintSectionFunc: method is nil but Logger.PrintSection was just called")
 	}
 	callInfo := struct {
-		Name string
+		Section processor.Section
 	}{
-		Name: name,
+		Section: section,
 	}
 	mock.lockPrintSection.Lock()
 	mock.calls.PrintSection = append(mock.calls.PrintSection, callInfo)
 	mock.lockPrintSection.Unlock()
-	mock.PrintSectionFunc(name)
+	mock.PrintSectionFunc(section)
 }
 
 // PrintSectionCalls gets all the calls that were made to PrintSection.
@@ -253,10 +253,10 @@ func (mock *LoggerMock) PrintSection(name string) {
 //
 //	len(mockedLogger.PrintSectionCalls())
 func (mock *LoggerMock) PrintSectionCalls() []struct {
-	Name string
+	Section processor.Section
 } {
 	var calls []struct {
-		Name string
+		Section processor.Section
 	}
 	mock.lockPrintSection.RLock()
 	calls = mock.calls.PrintSection
@@ -265,12 +265,12 @@ func (mock *LoggerMock) PrintSectionCalls() []struct {
 }
 
 // SetPhase calls SetPhaseFunc.
-func (mock *LoggerMock) SetPhase(phase progress.Phase) {
+func (mock *LoggerMock) SetPhase(phase processor.Phase) {
 	if mock.SetPhaseFunc == nil {
 		panic("LoggerMock.SetPhaseFunc: method is nil but Logger.SetPhase was just called")
 	}
 	callInfo := struct {
-		Phase progress.Phase
+		Phase processor.Phase
 	}{
 		Phase: phase,
 	}
@@ -285,10 +285,10 @@ func (mock *LoggerMock) SetPhase(phase progress.Phase) {
 //
 //	len(mockedLogger.SetPhaseCalls())
 func (mock *LoggerMock) SetPhaseCalls() []struct {
-	Phase progress.Phase
+	Phase processor.Phase
 } {
 	var calls []struct {
-		Phase progress.Phase
+		Phase processor.Phase
 	}
 	mock.lockSetPhase.RLock()
 	calls = mock.calls.SetPhase

@@ -123,7 +123,8 @@ func stripComments(content string) string {
 	// normalize line endings: convert CRLF to LF
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 
-	var lines []string
+	// pre-allocate with estimated capacity (count newlines + 1)
+	lines := make([]string, 0, strings.Count(content, "\n")+1)
 	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "#") {

@@ -12,11 +12,10 @@ import (
 
 	"github.com/umputun/ralphex/pkg/config"
 	"github.com/umputun/ralphex/pkg/executor"
-	"github.com/umputun/ralphex/pkg/progress"
 )
 
-// defaultIterationDelay is the pause between iterations to allow system to settle.
-const defaultIterationDelay = 2 * time.Second
+// DefaultIterationDelay is the pause between iterations to allow system to settle.
+const DefaultIterationDelay = 2 * time.Second
 
 // Mode represents the execution mode.
 type Mode string
@@ -51,10 +50,10 @@ type Executor interface {
 
 // Logger provides logging functionality.
 type Logger interface {
-	SetPhase(phase progress.Phase)
+	SetPhase(phase Phase)
 	Print(format string, args ...any)
 	PrintRaw(format string, args ...any)
-	PrintSection(name string)
+	PrintSection(section Section)
 	PrintAligned(text string)
 	Path() string
 }
@@ -104,7 +103,7 @@ func New(cfg Config, log Logger) *Runner {
 // NewWithExecutors creates a new Runner with custom executors (for testing).
 func NewWithExecutors(cfg Config, log Logger, claude, codex Executor) *Runner {
 	// determine iteration delay from config or default
-	iterDelay := defaultIterationDelay
+	iterDelay := DefaultIterationDelay
 	if cfg.IterationDelayMs > 0 {
 		iterDelay = time.Duration(cfg.IterationDelayMs) * time.Millisecond
 	}
@@ -149,7 +148,7 @@ func (r *Runner) runFull(ctx context.Context) error {
 	}
 
 	// phase 1: task execution
-	r.log.SetPhase(progress.PhaseTask)
+	r.log.SetPhase(PhaseTask)
 	r.log.PrintRaw("starting task execution phase\n")
 
 	if err := r.runTaskPhase(ctx); err != nil {
@@ -157,8 +156,8 @@ func (r *Runner) runFull(ctx context.Context) error {
 	}
 
 	// phase 2: first review pass - address ALL findings
-	r.log.SetPhase(progress.PhaseReview)
-	r.log.PrintSection("claude review 0: all findings")
+	r.log.SetPhase(PhaseReview)
+	r.log.PrintSection(NewGenericSection("claude review 0: all findings"))
 
 	if err := r.runClaudeReview(ctx, r.buildFirstReviewPrompt()); err != nil {
 		return fmt.Errorf("first review: %w", err)
@@ -170,15 +169,15 @@ func (r *Runner) runFull(ctx context.Context) error {
 	}
 
 	// phase 2.5: codex external review loop
-	r.log.SetPhase(progress.PhaseCodex)
-	r.log.PrintSection("codex external review")
+	r.log.SetPhase(PhaseCodex)
+	r.log.PrintSection(NewGenericSection("codex external review"))
 
 	if err := r.runCodexLoop(ctx); err != nil {
 		return fmt.Errorf("codex loop: %w", err)
 	}
 
 	// phase 3: claude review loop (critical/major) after codex
-	r.log.SetPhase(progress.PhaseReview)
+	r.log.SetPhase(PhaseReview)
 
 	if err := r.runClaudeReviewLoop(ctx); err != nil {
 		return fmt.Errorf("post-codex review loop: %w", err)
@@ -191,8 +190,8 @@ func (r *Runner) runFull(ctx context.Context) error {
 // runReviewOnly executes only the review pipeline: review → codex → review.
 func (r *Runner) runReviewOnly(ctx context.Context) error {
 	// phase 1: first review
-	r.log.SetPhase(progress.PhaseReview)
-	r.log.PrintSection("claude review 0: all findings")
+	r.log.SetPhase(PhaseReview)
+	r.log.PrintSection(NewGenericSection("claude review 0: all findings"))
 
 	if err := r.runClaudeReview(ctx, r.buildFirstReviewPrompt()); err != nil {
 		return fmt.Errorf("first review: %w", err)
@@ -204,15 +203,15 @@ func (r *Runner) runReviewOnly(ctx context.Context) error {
 	}
 
 	// phase 2: codex external review loop
-	r.log.SetPhase(progress.PhaseCodex)
-	r.log.PrintSection("codex external review")
+	r.log.SetPhase(PhaseCodex)
+	r.log.PrintSection(NewGenericSection("codex external review"))
 
 	if err := r.runCodexLoop(ctx); err != nil {
 		return fmt.Errorf("codex loop: %w", err)
 	}
 
 	// phase 3: claude review loop (critical/major) after codex
-	r.log.SetPhase(progress.PhaseReview)
+	r.log.SetPhase(PhaseReview)
 
 	if err := r.runClaudeReviewLoop(ctx); err != nil {
 		return fmt.Errorf("post-codex review loop: %w", err)
@@ -225,15 +224,15 @@ func (r *Runner) runReviewOnly(ctx context.Context) error {
 // runCodexOnly executes only the codex pipeline: codex → review.
 func (r *Runner) runCodexOnly(ctx context.Context) error {
 	// phase 1: codex external review loop
-	r.log.SetPhase(progress.PhaseCodex)
-	r.log.PrintSection("codex external review")
+	r.log.SetPhase(PhaseCodex)
+	r.log.PrintSection(NewGenericSection("codex external review"))
 
 	if err := r.runCodexLoop(ctx); err != nil {
 		return fmt.Errorf("codex loop: %w", err)
 	}
 
 	// phase 2: claude review loop (critical/major) after codex
-	r.log.SetPhase(progress.PhaseReview)
+	r.log.SetPhase(PhaseReview)
 
 	if err := r.runClaudeReviewLoop(ctx); err != nil {
 		return fmt.Errorf("post-codex review loop: %w", err)
@@ -256,7 +255,7 @@ func (r *Runner) runTaskPhase(ctx context.Context) error {
 		default:
 		}
 
-		r.log.PrintSection(fmt.Sprintf("task iteration %d", i))
+		r.log.PrintSection(NewTaskIterationSection(i))
 
 		result := r.claude.Run(ctx, prompt)
 		if result.Error != nil {
@@ -321,7 +320,7 @@ func (r *Runner) runClaudeReviewLoop(ctx context.Context) error {
 		default:
 		}
 
-		r.log.PrintSection(fmt.Sprintf("claude review %d: critical/major", i))
+		r.log.PrintSection(NewClaudeReviewSection(i, ": critical/major"))
 
 		result := r.claude.Run(ctx, r.buildSecondReviewPrompt())
 		if result.Error != nil {
@@ -365,7 +364,7 @@ func (r *Runner) runCodexLoop(ctx context.Context) error {
 		default:
 		}
 
-		r.log.PrintSection(fmt.Sprintf("codex iteration %d", i))
+		r.log.PrintSection(NewCodexIterationSection(i))
 
 		// run codex analysis
 		codexResult := r.codex.Run(ctx, r.buildCodexPrompt(i == 1, claudeResponse))
@@ -382,12 +381,12 @@ func (r *Runner) runCodexLoop(ctx context.Context) error {
 		r.showCodexSummary(codexResult.Output)
 
 		// pass codex output to claude for evaluation and fixing
-		r.log.SetPhase(progress.PhaseClaudeEval)
-		r.log.PrintSection("claude evaluating codex findings")
+		r.log.SetPhase(PhaseClaudeEval)
+		r.log.PrintSection(NewClaudeEvalSection())
 		claudeResult := r.claude.Run(ctx, r.buildCodexEvaluationPrompt(codexResult.Output))
 
 		// restore codex phase for next iteration
-		r.log.SetPhase(progress.PhaseCodex)
+		r.log.SetPhase(PhaseCodex)
 		if claudeResult.Error != nil {
 			return fmt.Errorf("claude execution: %w", claudeResult.Error)
 		}

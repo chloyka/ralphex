@@ -24,6 +24,7 @@ pkg/executor/       # claude and codex CLI execution
 pkg/git/            # git operations using go-git library
 pkg/processor/      # orchestration loop, prompts, signals
 pkg/progress/       # timestamped logging with color
+pkg/web/            # web dashboard, SSE streaming, session management
 docs/plans/         # plan files location
 ```
 
@@ -39,8 +40,15 @@ docs/plans/         # plan files location
 - Signal-based completion detection (COMPLETED, FAILED, REVIEW_DONE signals)
 - Streaming output with timestamps
 - Progress logging to files
+- Progress file locking (flock) for active session detection
 - Multiple execution modes: full, review-only, codex-only
 - Configuration via `~/.config/ralphex/` with embedded defaults
+- File watching for multi-session dashboard using fsnotify
+
+## Platform Support
+
+- **Linux/macOS:** fully supported
+- **Windows:** not supported (uses `syscall.Flock` for progress file locking)
 
 ## Configuration
 

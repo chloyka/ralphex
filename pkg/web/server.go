@@ -1,0 +1,387 @@
+package web
+
+import (
+	"context"
+	"embed"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"html/template"
+	"io/fs"
+	"log"
+	"net/http"
+	"path/filepath"
+	"sort"
+	"sync"
+	"time"
+)
+
+//go:embed templates static
+var embeddedFS embed.FS
+
+// ServerConfig holds configuration for the web server.
+type ServerConfig struct {
+	Port     int    // port to listen on
+	PlanName string // plan name to display in dashboard
+	Branch   string // git branch name
+	PlanFile string // path to plan file for /api/plan endpoint
+}
+
+// Server provides HTTP server for the real-time dashboard.
+type Server struct {
+	cfg     ServerConfig
+	session *Session        // used for single-session mode (direct execution)
+	sm      *SessionManager // used for multi-session mode (dashboard)
+	srv     *http.Server
+	tmpl    *template.Template
+
+	// plan caching - set after first successful load (single-session mode)
+	planMu    sync.Mutex
+	planCache *Plan
+}
+
+// NewServer creates a new web server for single-session mode (direct execution).
+// returns an error if the embedded template fails to parse.
+func NewServer(cfg ServerConfig, session *Session) (*Server, error) {
+	tmpl, err := template.ParseFS(embeddedFS, "templates/base.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse template: %w", err)
+	}
+
+	return &Server{
+		cfg:     cfg,
+		session: session,
+		tmpl:    tmpl,
+	}, nil
+}
+
+// NewServerWithSessions creates a new web server for multi-session mode (dashboard).
+// returns an error if the embedded template fails to parse.
+func NewServerWithSessions(cfg ServerConfig, sm *SessionManager) (*Server, error) {
+	tmpl, err := template.ParseFS(embeddedFS, "templates/base.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse template: %w", err)
+	}
+
+	return &Server{
+		cfg:  cfg,
+		sm:   sm,
+		tmpl: tmpl,
+	}, nil
+}
+
+// Start begins listening for HTTP requests.
+// blocks until the server is stopped or an error occurs.
+func (s *Server) Start(ctx context.Context) error {
+	mux := http.NewServeMux()
+
+	// register routes
+	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/events", s.handleEvents)
+	mux.HandleFunc("/api/plan", s.handlePlan)
+	mux.HandleFunc("/api/sessions", s.handleSessions)
+
+	// static files
+	staticFS, err := fs.Sub(embeddedFS, "static")
+	if err != nil {
+		return fmt.Errorf("static filesystem: %w", err)
+	}
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+
+	s.srv = &http.Server{
+		Addr:              fmt.Sprintf("127.0.0.1:%d", s.cfg.Port),
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	// start shutdown listener
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = s.srv.Shutdown(shutdownCtx)
+	}()
+
+	err = s.srv.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return fmt.Errorf("http server: %w", err)
+}
+
+// Stop gracefully shuts down the server.
+func (s *Server) Stop() error {
+	if s.srv == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.srv.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown server: %w", err)
+	}
+	return nil
+}
+
+// Session returns the server's session (for single-session mode).
+func (s *Server) Session() *Session {
+	return s.session
+}
+
+// templateData holds data for the dashboard template.
+type templateData struct {
+	PlanName string
+	Branch   string
+}
+
+// handleIndex serves the main dashboard page.
+func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	data := templateData{
+		PlanName: s.cfg.PlanName,
+		Branch:   s.cfg.Branch,
+	}
+
+	if err := s.tmpl.Execute(w, data); err != nil {
+		http.Error(w, "template execution error", http.StatusInternalServerError)
+		return
+	}
+}
+
+// handlePlan serves the parsed plan as JSON.
+// in single-session mode, uses the server's configured plan file with caching.
+// in multi-session mode, accepts ?session=<id> to load plan from session metadata.
+func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sessionID := r.URL.Query().Get("session")
+
+	// multi-session mode with session ID
+	if s.sm != nil && sessionID != "" {
+		s.handleSessionPlan(w, sessionID)
+		return
+	}
+
+	// single-session mode - use cached server plan
+	if s.cfg.PlanFile == "" {
+		http.Error(w, "no plan file configured", http.StatusNotFound)
+		return
+	}
+
+	plan, err := s.loadPlan()
+	if err != nil {
+		log.Printf("[WARN] failed to load plan file %s: %v", s.cfg.PlanFile, err)
+		http.Error(w, "unable to load plan", http.StatusInternalServerError)
+		return
+	}
+
+	data, err := plan.JSON()
+	if err != nil {
+		log.Printf("[WARN] failed to encode plan: %v", err)
+		http.Error(w, "unable to encode plan", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(data)
+}
+
+// handleSessionPlan handles plan requests for a specific session in multi-session mode.
+func (s *Server) handleSessionPlan(w http.ResponseWriter, sessionID string) {
+	session := s.sm.Get(sessionID)
+	if session == nil {
+		http.Error(w, "session not found: "+sessionID, http.StatusNotFound)
+		return
+	}
+
+	meta := session.GetMetadata()
+	if meta.PlanPath == "" {
+		http.Error(w, "no plan file for session", http.StatusNotFound)
+		return
+	}
+
+	// resolve plan path: absolute paths used as-is, relative paths resolved from session directory
+	var planPath string
+	if filepath.IsAbs(meta.PlanPath) {
+		planPath = meta.PlanPath
+	} else {
+		sessionDir := filepath.Dir(session.Path)
+		planPath = filepath.Join(sessionDir, meta.PlanPath)
+	}
+
+	plan, err := loadPlanWithFallback(planPath)
+	if err != nil {
+		log.Printf("[WARN] failed to load plan file %s: %v", meta.PlanPath, err)
+		http.Error(w, "unable to load plan", http.StatusInternalServerError)
+		return
+	}
+
+	data, err := plan.JSON()
+	if err != nil {
+		log.Printf("[WARN] failed to encode plan: %v", err)
+		http.Error(w, "unable to encode plan", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(data)
+}
+
+// loadPlan returns a cached plan or loads it from disk (with completed/ fallback).
+func (s *Server) loadPlan() (*Plan, error) {
+	s.planMu.Lock()
+	defer s.planMu.Unlock()
+
+	if s.planCache != nil {
+		return s.planCache, nil
+	}
+
+	plan, err := loadPlanWithFallback(s.cfg.PlanFile)
+	if err != nil {
+		return nil, err
+	}
+
+	s.planCache = plan
+	return plan, nil
+}
+
+// loadPlanWithFallback loads a plan from disk with completed/ directory fallback.
+// does not cache - each call reads from disk.
+func loadPlanWithFallback(path string) (*Plan, error) {
+	plan, err := ParsePlanFile(path)
+	if err != nil && errors.Is(err, fs.ErrNotExist) {
+		completedPath := filepath.Join(filepath.Dir(path), "completed", filepath.Base(path))
+		plan, err = ParsePlanFile(completedPath)
+	}
+	return plan, err
+}
+
+// handleEvents serves the SSE stream.
+// in multi-session mode, accepts ?session=<id> query parameter.
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("session")
+	log.Printf("[SSE] connection request: session=%s", sessionID)
+
+	// get session for SSE handling
+	session, err := s.getSession(r)
+	if err != nil {
+		log.Printf("[SSE] session not found: %s - %v", sessionID, err)
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// delegate to go-sse Server which handles:
+	// - SSE protocol (headers, event formatting)
+	// - Connection management
+	// - History replay via FiniteReplayer
+	// - Graceful disconnection
+	session.SSE.ServeHTTP(w, r)
+	log.Printf("[SSE] connection closed: session=%s", sessionID)
+}
+
+// getSession returns the session for the request.
+// in single-session mode, returns the server's session.
+// in multi-session mode, looks up the session by ID from query parameter.
+func (s *Server) getSession(r *http.Request) (*Session, error) {
+	sessionID := r.URL.Query().Get("session")
+
+	// single-session mode (no session manager or no session ID)
+	if s.sm == nil || sessionID == "" {
+		if s.session == nil {
+			return nil, errors.New("no session specified")
+		}
+		return s.session, nil
+	}
+
+	// multi-session mode - look up session
+	session := s.sm.Get(sessionID)
+	if session == nil {
+		log.Printf("[SSE] session lookup failed: %s (not in manager)", sessionID)
+		return nil, fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	return session, nil
+}
+
+// SessionInfo represents session data for the API response.
+type SessionInfo struct {
+	ID           string       `json:"id"`
+	State        SessionState `json:"state"`
+	Dir          string       `json:"dir"`
+	PlanPath     string       `json:"planPath,omitempty"`
+	Branch       string       `json:"branch,omitempty"`
+	Mode         string       `json:"mode,omitempty"`
+	StartTime    time.Time    `json:"startTime"`
+	LastModified time.Time    `json:"lastModified"`
+}
+
+// handleSessions returns a list of all discovered sessions.
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// single-session mode - return empty list
+	if s.sm == nil {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+		return
+	}
+
+	sessions := s.sm.All()
+
+	// sort by last modified (most recent first)
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].GetLastModified().After(sessions[j].GetLastModified())
+	})
+
+	// convert to API response format
+	infos := make([]SessionInfo, 0, len(sessions))
+	for _, session := range sessions {
+		meta := session.GetMetadata()
+		infos = append(infos, SessionInfo{
+			ID:           session.ID,
+			State:        session.GetState(),
+			Dir:          extractProjectDir(session.Path),
+			PlanPath:     meta.PlanPath,
+			Branch:       meta.Branch,
+			Mode:         meta.Mode,
+			StartTime:    meta.StartTime,
+			LastModified: session.GetLastModified(),
+		})
+	}
+
+	data, err := json.Marshal(infos)
+	if err != nil {
+		log.Printf("[WARN] failed to encode sessions: %v", err)
+		http.Error(w, "unable to encode sessions", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(data)
+}
+
+// extractProjectDir extracts project directory name from session path.
+// handles edge cases where path has no meaningful parent directory.
+func extractProjectDir(path string) string {
+	dir := filepath.Dir(path)
+	name := filepath.Base(dir)
+
+	// handle edge cases: root paths, current directory, relative paths
+	if name == "" || name == "." || name == ".." || name == string(filepath.Separator) {
+		return "Unknown"
+	}
+	return name
+}
