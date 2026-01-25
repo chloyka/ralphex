@@ -63,10 +63,21 @@ Do NOT reject issues just because they existed before this branch - fix them any
 
 ## Step 4: Signal Completion
 
-After fixing all confirmed issues (or if none found), output exactly: <<<RALPHEX:REVIEW_DONE>>>
+SIGNAL LOGIC - READ CAREFULLY:
 
-Then STOP. Do not continue. The external loop will run additional review passes to verify.
+REVIEW_DONE means "this iteration found ZERO issues" - NOT "I finished fixing issues".
 
-If unable to fix issues after reasonable attempts: <<<RALPHEX:TASK_FAILED>>>
+Path A - NO confirmed issues found:
+- You reviewed the code and found nothing to fix
+- Output: <<<RALPHEX:REVIEW_DONE>>>
+
+Path B - Issues found AND fixed:
+- You found issues, fixed them, and committed
+- STOP HERE. Do NOT output any signal. Do NOT output REVIEW_DONE.
+- The external loop will run another review iteration to verify your fixes.
+- Your fixes might have introduced new issues - another iteration must check.
+
+Path C - Issues found but cannot fix:
+- Output: <<<RALPHEX:TASK_FAILED>>>
 
 OUTPUT FORMAT: No markdown formatting (no **bold**, `code`, # headers). Plain text and - lists are fine.

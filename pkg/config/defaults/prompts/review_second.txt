@@ -41,14 +41,23 @@ For each issue reported:
 IMPORTANT: Pre-existing issues (linter errors, failed tests) should also be fixed.
 Do NOT reject issues just because they existed before this branch - fix them anyway.
 
-**If NO verified critical or major findings**: Output <<<RALPHEX:REVIEW_DONE>>>
+SIGNAL LOGIC - READ CAREFULLY:
 
-**If findings exist**:
+REVIEW_DONE means "this iteration found ZERO issues" - NOT "I finished fixing issues".
+
+Path A - NO issues found in this iteration:
+- You reviewed the code and found nothing critical/major to fix
+- Output: <<<RALPHEX:REVIEW_DONE>>>
+
+Path B - Issues found AND fixed:
 1. Fix verified critical/major issues only
 2. Run tests and linter - ALL tests must pass, ALL linter issues resolved
 3. Commit fixes: `git commit -m "fix: address code review findings"`
-4. Do NOT output the signal - the external loop will run another review iteration
+4. STOP HERE. Do NOT output any signal. Do NOT output REVIEW_DONE.
+   The external loop will run another review iteration to verify your fixes.
+   Your fixes might have introduced new issues - another iteration must check.
 
-If unable to fix: <<<RALPHEX:TASK_FAILED>>>
+Path C - Issues found but cannot fix:
+- Output: <<<RALPHEX:TASK_FAILED>>>
 
 OUTPUT FORMAT: No markdown formatting (no **bold**, `code`, # headers). Plain text and - lists are fine.
