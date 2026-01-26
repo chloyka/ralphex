@@ -519,6 +519,7 @@ func TestCreateBranchIfNeeded(t *testing.T) {
 		assert.Contains(t, err.Error(), "cannot create branch")
 		assert.Contains(t, err.Error(), "uncommitted changes")
 		assert.Contains(t, err.Error(), "git stash")
+		assert.Contains(t, err.Error(), "git commit -am")
 		assert.Contains(t, err.Error(), "ralphex --review")
 	})
 
