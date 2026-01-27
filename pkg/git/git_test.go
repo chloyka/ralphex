@@ -791,6 +791,26 @@ func TestRepo_IsIgnored(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, ignored)
 	})
+
+	t.Run("uses XDG_CONFIG_HOME for global patterns", func(t *testing.T) {
+		dir := setupTestRepo(t)
+		repo, err := Open(dir)
+		require.NoError(t, err)
+
+		// isolate from real home directory to ensure LoadGlobalPatterns returns empty
+		// and XDG fallback is triggered
+		fakeHome := t.TempDir()
+		t.Setenv("HOME", fakeHome)
+		t.Setenv("XDG_CONFIG_HOME", fakeHome)
+
+		// set up XDG ignore file
+		require.NoError(t, os.MkdirAll(filepath.Join(fakeHome, "git"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(fakeHome, "git", "ignore"), []byte("*.xdgignored\n"), 0o600))
+
+		ignored, err := repo.IsIgnored("test.xdgignored")
+		require.NoError(t, err)
+		assert.True(t, ignored, "file matching XDG global gitignore pattern should be ignored")
+	})
 }
 
 func TestRepo_HasChangesOtherThan(t *testing.T) {
