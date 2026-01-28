@@ -54,7 +54,7 @@ func TestPromptPlanDescription(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			reader := strings.NewReader(tc.input)
-			result := promptPlanDescription(reader, colors)
+			result := promptPlanDescription(context.Background(), reader, colors)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
@@ -62,7 +62,16 @@ func TestPromptPlanDescription(t *testing.T) {
 	t.Run("eof_returns_empty", func(t *testing.T) {
 		// empty reader simulates EOF (Ctrl+D)
 		reader := strings.NewReader("")
-		result := promptPlanDescription(reader, colors)
+		result := promptPlanDescription(context.Background(), reader, colors)
+		assert.Empty(t, result)
+	})
+
+	t.Run("context_cancelled_returns_empty", func(t *testing.T) {
+		// cancelled context simulates Ctrl+C
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // cancel immediately
+		reader := strings.NewReader("some input\n")
+		result := promptPlanDescription(ctx, reader, colors)
 		assert.Empty(t, result)
 	})
 }
@@ -1335,7 +1344,7 @@ func TestEnsureRepoHasCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		var stdout bytes.Buffer
-		err = ensureRepoHasCommits(gitOps, strings.NewReader(""), &stdout)
+		err = ensureRepoHasCommits(context.Background(), gitOps, strings.NewReader(""), &stdout)
 		assert.NoError(t, err)
 	})
 
@@ -1357,7 +1366,7 @@ func TestEnsureRepoHasCommits(t *testing.T) {
 		assert.False(t, hasCommits)
 
 		var stdout bytes.Buffer
-		err = ensureRepoHasCommits(gitOps, strings.NewReader("y\n"), &stdout)
+		err = ensureRepoHasCommits(context.Background(), gitOps, strings.NewReader("y\n"), &stdout)
 		require.NoError(t, err)
 
 		// verify commit was created
@@ -1379,7 +1388,7 @@ func TestEnsureRepoHasCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		var stdout bytes.Buffer
-		err = ensureRepoHasCommits(gitOps, strings.NewReader("n\n"), &stdout)
+		err = ensureRepoHasCommits(context.Background(), gitOps, strings.NewReader("n\n"), &stdout)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no commits - please create initial commit manually")
 	})
@@ -1393,7 +1402,7 @@ func TestEnsureRepoHasCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		var stdout bytes.Buffer
-		err = ensureRepoHasCommits(gitOps, strings.NewReader(""), &stdout)
+		err = ensureRepoHasCommits(context.Background(), gitOps, strings.NewReader(""), &stdout)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no commits - please create initial commit manually")
 	})
@@ -1409,9 +1418,26 @@ func TestEnsureRepoHasCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		var stdout bytes.Buffer
-		err = ensureRepoHasCommits(gitOps, strings.NewReader("y\n"), &stdout)
+		err = ensureRepoHasCommits(context.Background(), gitOps, strings.NewReader("y\n"), &stdout)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "create initial commit")
+	})
+
+	t.Run("returns error when context cancelled", func(t *testing.T) {
+		dir := t.TempDir()
+		_, err := gogit.PlainInit(dir, false)
+		require.NoError(t, err)
+
+		gitOps, err := git.Open(dir)
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // cancel immediately
+
+		var stdout bytes.Buffer
+		err = ensureRepoHasCommits(ctx, gitOps, strings.NewReader("y\n"), &stdout)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no commits - please create initial commit manually")
 	})
 }
 

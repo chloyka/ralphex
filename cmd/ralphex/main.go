@@ -173,7 +173,7 @@ func run(ctx context.Context, o opts) error {
 	}
 
 	// ensure repository has commits (prompts to create initial commit if empty)
-	if ensureErr := ensureRepoHasCommits(gitOps, os.Stdin, os.Stdout); ensureErr != nil {
+	if ensureErr := ensureRepoHasCommits(ctx, gitOps, os.Stdin, os.Stdout); ensureErr != nil {
 		return ensureErr
 	}
 
@@ -233,13 +233,13 @@ func isMainBranch(branch string) bool {
 }
 
 // promptPlanDescription prompts the user for a plan description when no plans are found.
-// returns the trimmed description, or empty string if user cancels (Ctrl+D/EOF or empty input).
-func promptPlanDescription(r io.Reader, colors *progress.Colors) string {
+// returns the trimmed description, or empty string if user cancels (Ctrl+C/Ctrl+D/EOF or empty input).
+func promptPlanDescription(ctx context.Context, r io.Reader, colors *progress.Colors) string {
 	colors.Info().Printf("no plans found. what would you like to implement?\n")
 	colors.Info().Printf("(enter description or press Ctrl+D to cancel): ")
 
 	reader := bufio.NewReader(r)
-	line, err := reader.ReadString('\n')
+	line, err := input.ReadLineWithContext(ctx, reader)
 	if err != nil {
 		// EOF (Ctrl+D) is graceful cancel
 		return ""
@@ -260,7 +260,7 @@ func tryAutoPlanMode(ctx context.Context, err error, o opts, gitOps *git.Repo, c
 		return false, nil //nolint:nilerr // branchErr is intentionally ignored - if we can't get branch, skip auto-plan-mode
 	}
 
-	description := promptPlanDescription(os.Stdin, colors)
+	description := promptPlanDescription(ctx, os.Stdin, colors)
 	if description == "" {
 		return true, nil // user canceled
 	}
@@ -669,7 +669,7 @@ func checkDependencies(deps ...string) error {
 
 // ensureRepoHasCommits checks that the repository has at least one commit.
 // if the repository is empty, prompts the user to create an initial commit.
-func ensureRepoHasCommits(gitOps *git.Repo, stdin io.Reader, stdout io.Writer) error {
+func ensureRepoHasCommits(ctx context.Context, gitOps *git.Repo, stdin io.Reader, stdout io.Writer) error {
 	hasCommits, err := gitOps.HasCommits()
 	if err != nil {
 		return fmt.Errorf("check commits: %w", err)
@@ -682,7 +682,7 @@ func ensureRepoHasCommits(gitOps *git.Repo, stdin io.Reader, stdout io.Writer) e
 	fmt.Fprintln(stdout, "repository has no commits")
 	fmt.Fprintln(stdout, "ralphex needs at least one commit to create feature branches.")
 	fmt.Fprintln(stdout)
-	if !input.AskYesNo("create initial commit?", stdin, stdout) {
+	if !input.AskYesNo(ctx, "create initial commit?", stdin, stdout) {
 		return errors.New("no commits - please create initial commit manually")
 	}
 

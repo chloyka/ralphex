@@ -36,7 +36,7 @@ func TestTerminalCollector_selectWithNumbers(t *testing.T) {
 			var stdout bytes.Buffer
 			c := &TerminalCollector{stdin: strings.NewReader(tc.input), stdout: &stdout}
 
-			got, err := c.selectWithNumbers(tc.question, tc.options)
+			got, err := c.selectWithNumbers(context.Background(), tc.question, tc.options)
 
 			if tc.wantErr != "" {
 				require.Error(t, err)
@@ -80,7 +80,7 @@ func TestTerminalCollector_selectWithNumbers_outputFormat(t *testing.T) {
 	var stdout bytes.Buffer
 	c := &TerminalCollector{stdin: strings.NewReader("2\n"), stdout: &stdout}
 
-	_, err := c.selectWithNumbers("Which database?", []string{"PostgreSQL", "MySQL", "SQLite"})
+	_, err := c.selectWithNumbers(context.Background(), "Which database?", []string{"PostgreSQL", "MySQL", "SQLite"})
 	require.NoError(t, err)
 
 	output := stdout.String()
@@ -95,7 +95,7 @@ func TestTerminalCollector_selectWithNumbers_readError(t *testing.T) {
 	// use an empty reader that will return EOF immediately
 	c := &TerminalCollector{stdin: strings.NewReader(""), stdout: &bytes.Buffer{}}
 
-	_, err := c.selectWithNumbers("Pick one", []string{"A", "B"})
+	_, err := c.selectWithNumbers(context.Background(), "Pick one", []string{"A", "B"})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "read input")
@@ -130,10 +130,18 @@ func TestAskYesNo(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var stdout bytes.Buffer
-			got := AskYesNo(prompt, strings.NewReader(tc.input), &stdout)
+			got := AskYesNo(context.Background(), prompt, strings.NewReader(tc.input), &stdout)
 			assert.Equal(t, tc.want, got)
 			assert.Contains(t, stdout.String(), prompt)
 			assert.Contains(t, stdout.String(), "[y/N]")
 		})
 	}
+
+	t.Run("context_cancelled_returns_false", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // cancel immediately
+		var stdout bytes.Buffer
+		got := AskYesNo(ctx, prompt, strings.NewReader("y\n"), &stdout)
+		assert.False(t, got)
+	})
 }
