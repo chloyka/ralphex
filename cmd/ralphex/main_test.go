@@ -1437,7 +1437,7 @@ func TestEnsureRepoHasCommits(t *testing.T) {
 		var stdout bytes.Buffer
 		err = ensureRepoHasCommits(ctx, gitOps, strings.NewReader("y\n"), &stdout)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no commits - please create initial commit manually")
+		assert.ErrorIs(t, err, context.Canceled)
 	})
 }
 
