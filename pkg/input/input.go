@@ -36,7 +36,7 @@ func ReadLineWithContext(ctx context.Context, reader *bufio.Reader) (string, err
 
 	select {
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return "", fmt.Errorf("read line: %w", ctx.Err())
 	case result := <-resultCh:
 		return result.line, result.err
 	}
