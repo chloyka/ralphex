@@ -14,16 +14,16 @@ import (
 )
 
 // ReadLineResult holds the result of reading a line
-type ReadLineResult struct {
-	Line string
-	Err  error
+type readLineResult struct {
+	line string
+	err  error
 }
 
 // ReadLineWithContext reads a line from reader with context cancellation support.
 // returns the line (including newline), error, or context error if canceled.
 // this allows Ctrl+C (SIGINT) to interrupt blocking stdin reads.
 func ReadLineWithContext(ctx context.Context, reader *bufio.Reader) (string, error) {
-	resultCh := make(chan ReadLineResult, 1)
+	resultCh := make(chan readLineResult, 1)
 
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("read line: %w", err)
@@ -31,14 +31,14 @@ func ReadLineWithContext(ctx context.Context, reader *bufio.Reader) (string, err
 
 	go func() {
 		line, err := reader.ReadString('\n')
-		resultCh <- ReadLineResult{Line: line, Err: err}
+		resultCh <- readLineResult{line: line, err: err}
 	}()
 
 	select {
 	case <-ctx.Done():
 		return "", ctx.Err()
 	case result := <-resultCh:
-		return result.Line, result.Err
+		return result.line, result.err
 	}
 }
 
