@@ -1,13 +1,18 @@
 package web
 
 import (
+	"os"
+	"strings"
+	"sync"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/umputun/ralphex/pkg/processor"
 	"github.com/umputun/ralphex/pkg/processor/mocks"
+	"github.com/umputun/ralphex/pkg/tui"
 )
 
 func TestNewBroadcastLogger(t *testing.T) {
@@ -222,6 +227,57 @@ func TestBroadcastLogger_PrintSection_IterationEvents(t *testing.T) {
 	require.Len(t, mockLogger.PrintSectionCalls(), 2)
 }
 
+func TestBroadcastLogger_LogQuestion(t *testing.T) {
+	mockLogger := &mocks.LoggerMock{
+		LogQuestionFunc: func(string, []string) {},
+	}
+	session := NewSession("test", "/tmp/test.txt")
+	defer session.Close()
+	bl := NewBroadcastLogger(mockLogger, session)
+
+	bl.LogQuestion("Which backend?", []string{"Redis", "Memcached"})
+
+	// verify inner logger was called
+	require.Len(t, mockLogger.LogQuestionCalls(), 1)
+	assert.Equal(t, "Which backend?", mockLogger.LogQuestionCalls()[0].Question)
+	assert.Equal(t, []string{"Redis", "Memcached"}, mockLogger.LogQuestionCalls()[0].Options)
+}
+
+func TestBroadcastLogger_LogAnswer(t *testing.T) {
+	mockLogger := &mocks.LoggerMock{
+		LogAnswerFunc: func(string) {},
+	}
+	session := NewSession("test", "/tmp/test.txt")
+	defer session.Close()
+	bl := NewBroadcastLogger(mockLogger, session)
+
+	bl.LogAnswer("Redis")
+
+	// verify inner logger was called
+	require.Len(t, mockLogger.LogAnswerCalls(), 1)
+	assert.Equal(t, "Redis", mockLogger.LogAnswerCalls()[0].Answer)
+}
+
+func TestBroadcastLogger_PrintAligned_WithSignal(t *testing.T) {
+	mockLogger := &mocks.LoggerMock{
+		PrintAlignedFunc: func(string) {},
+	}
+	session := NewSession("test", "/tmp/test.txt")
+	defer session.Close()
+	bl := NewBroadcastLogger(mockLogger, session)
+
+	// text containing a terminal signal should trigger signal broadcast
+	bl.PrintAligned("output with <<<RALPHEX:ALL_TASKS_DONE>>> marker")
+
+	require.Len(t, mockLogger.PrintAlignedCalls(), 1)
+	assert.Contains(t, mockLogger.PrintAlignedCalls()[0].Text, "<<<RALPHEX:ALL_TASKS_DONE>>>")
+}
+
+func TestBroadcastLogger_ImplementsProcessorLogger(t *testing.T) {
+	// compile-time check that BroadcastLogger implements processor.Logger
+	var _ processor.Logger = (*BroadcastLogger)(nil)
+}
+
 func TestExtractTerminalSignal(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -261,4 +317,196 @@ func TestExtractTerminalSignal(t *testing.T) {
 			assert.Equal(t, tc.signal, got)
 		})
 	}
+}
+
+// mockSender collects messages sent via Send() for verifying TUI integration.
+type mockSender struct {
+	mu   sync.Mutex
+	msgs []tea.Msg
+}
+
+func (s *mockSender) Send(msg tea.Msg) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.msgs = append(s.msgs, msg)
+}
+
+func (s *mockSender) messages() []tea.Msg {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := make([]tea.Msg, len(s.msgs))
+	copy(result, s.msgs)
+	return result
+}
+
+// TestBroadcastLogger_WithTeaLogger_Integration verifies that BroadcastLogger
+// wrapping a real teaLogger sends messages to both TUI (via tea.Msg) and SSE session.
+// this is the core integration test for --serve alongside TUI.
+func TestBroadcastLogger_WithTeaLogger_Integration(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	require.NoError(t, os.Chdir(tmpDir))
+	defer func() { _ = os.Chdir(origDir) }()
+
+	// create a real teaLogger with a mock sender to capture TUI messages
+	sender := &mockSender{}
+	tuiLog, err := tui.NewLogger(tui.LoggerConfig{
+		PlanFile: "docs/plans/test-feature.md",
+		Mode:     "full",
+		Branch:   "test-branch",
+	}, sender)
+	require.NoError(t, err)
+	defer tuiLog.Close()
+
+	// create SSE session and wrap with BroadcastLogger
+	session := NewSession("test", tuiLog.Path())
+	defer session.Close()
+	bl := NewBroadcastLogger(tuiLog, session)
+
+	// exercise all Logger interface methods through BroadcastLogger
+	bl.SetPhase(processor.PhaseReview)
+	bl.Print("test message %d", 1)
+	bl.PrintRaw("raw message")
+	bl.PrintSection(processor.NewGenericSection("test section"))
+	bl.PrintAligned("aligned line 1\naligned line 2")
+	bl.LogQuestion("pick one", []string{"A", "B"})
+	bl.LogAnswer("A")
+
+	// verify TUI messages were sent (teaLogger sends through sender)
+	msgs := sender.messages()
+
+	var foundPhaseChange, foundOutput, foundRawOutput, foundSection, foundAligned bool
+	for _, msg := range msgs {
+		switch m := msg.(type) {
+		case tui.PhaseChangeMsg:
+			if m.Phase == processor.PhaseReview {
+				foundPhaseChange = true
+			}
+		case tui.OutputMsg:
+			if strings.Contains(m.Text, "test message 1") {
+				foundOutput = true
+			}
+			if m.Text == "raw message" {
+				foundRawOutput = true
+			}
+			if strings.Contains(m.Text, "aligned line 1") {
+				foundAligned = true
+			}
+		case tui.SectionMsg:
+			if m.Section.Label == "test section" {
+				foundSection = true
+			}
+		}
+	}
+
+	assert.True(t, foundPhaseChange, "expected PhaseChangeMsg sent to TUI")
+	assert.True(t, foundOutput, "expected OutputMsg with 'test message 1' sent to TUI")
+	assert.True(t, foundRawOutput, "expected OutputMsg with 'raw message' sent to TUI")
+	assert.True(t, foundSection, "expected SectionMsg sent to TUI")
+	assert.True(t, foundAligned, "expected OutputMsg with aligned text sent to TUI")
+
+	// verify progress file was written (teaLogger writes to file)
+	content, err := os.ReadFile(tuiLog.Path())
+	require.NoError(t, err)
+	contentStr := string(content)
+	assert.Contains(t, contentStr, "test message 1")
+	assert.Contains(t, contentStr, "raw message")
+	assert.Contains(t, contentStr, "--- test section ---")
+	assert.Contains(t, contentStr, "aligned line 1")
+	assert.Contains(t, contentStr, "aligned line 2")
+	assert.Contains(t, contentStr, "QUESTION: pick one")
+	assert.Contains(t, contentStr, "ANSWER: A")
+
+	// verify Path() returns the teaLogger's path
+	assert.Equal(t, tuiLog.Path(), bl.Path())
+}
+
+// TestBroadcastLogger_WithTeaLogger_SSEEvents verifies that SSE events are
+// published to the session when BroadcastLogger wraps teaLogger.
+func TestBroadcastLogger_WithTeaLogger_SSEEvents(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	require.NoError(t, os.Chdir(tmpDir))
+	defer func() { _ = os.Chdir(origDir) }()
+
+	sender := &mockSender{}
+	tuiLog, err := tui.NewLogger(tui.LoggerConfig{
+		PlanFile: "docs/plans/sse-test.md",
+		Mode:     "full",
+		Branch:   "main",
+	}, sender)
+	require.NoError(t, err)
+	defer tuiLog.Close()
+
+	session := NewSession("sse-test", tuiLog.Path())
+	defer session.Close()
+	bl := NewBroadcastLogger(tuiLog, session)
+
+	// exercise methods that produce SSE events
+	bl.Print("sse output test")
+	bl.PrintSection(processor.NewTaskIterationSection(1))
+	bl.PrintSection(processor.NewTaskIterationSection(2))
+	bl.SetPhase(processor.PhaseReview)
+
+	// verify task boundary tracking (SSE-specific behavior)
+	assert.Equal(t, 0, bl.currentTask, "currentTask should be 0 after phase transition from task")
+
+	// verify BroadcastLogger tracked the phase correctly
+	assert.Equal(t, processor.PhaseReview, bl.phase)
+}
+
+// TestBroadcastLogger_WithTeaLogger_PhaseTransitions verifies phase transitions
+// produce correct SSE boundary events when wrapping teaLogger.
+func TestBroadcastLogger_WithTeaLogger_PhaseTransitions(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	require.NoError(t, os.Chdir(tmpDir))
+	defer func() { _ = os.Chdir(origDir) }()
+
+	sender := &mockSender{}
+	tuiLog, err := tui.NewLogger(tui.LoggerConfig{
+		Mode:   "full",
+		Branch: "main",
+	}, sender)
+	require.NoError(t, err)
+	defer tuiLog.Close()
+
+	session := NewSession("phase-test", tuiLog.Path())
+	defer session.Close()
+	bl := NewBroadcastLogger(tuiLog, session)
+
+	// simulate full execution flow: task -> review -> codex
+	bl.SetPhase(processor.PhaseTask)
+	bl.PrintSection(processor.NewTaskIterationSection(1))
+	assert.Equal(t, 1, bl.currentTask)
+
+	bl.PrintSection(processor.NewTaskIterationSection(2))
+	assert.Equal(t, 2, bl.currentTask)
+
+	// transition to review - should emit task_end and reset
+	bl.SetPhase(processor.PhaseReview)
+	assert.Equal(t, 0, bl.currentTask)
+	assert.Equal(t, processor.PhaseReview, bl.phase)
+
+	bl.PrintSection(processor.NewClaudeReviewSection(1, ""))
+
+	// transition to codex
+	bl.SetPhase(processor.PhaseCodex)
+	assert.Equal(t, processor.PhaseCodex, bl.phase)
+
+	bl.PrintSection(processor.NewCodexIterationSection(1))
+
+	// verify TUI received all phase changes
+	msgs := sender.messages()
+	var phaseChanges []processor.Phase
+	for _, msg := range msgs {
+		if pcm, ok := msg.(tui.PhaseChangeMsg); ok {
+			phaseChanges = append(phaseChanges, pcm.Phase)
+		}
+	}
+	assert.Equal(t, []processor.Phase{
+		processor.PhaseTask,
+		processor.PhaseReview,
+		processor.PhaseCodex,
+	}, phaseChanges, "TUI should receive all phase transitions")
 }

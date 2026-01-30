@@ -1,13 +1,11 @@
 package progress
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/fatih/color"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -15,7 +13,7 @@ import (
 	"github.com/umputun/ralphex/pkg/processor"
 )
 
-// testColors returns a Colors instance for testing with valid RGB values.
+// testColors returns a Colors stub for testing.
 func testColors() *Colors {
 	return NewColors(config.ColorConfig{
 		Task:       "0,255,0",
@@ -75,13 +73,9 @@ func TestLogger_Print(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { _ = os.Chdir(origDir) }()
 
-	l, err := NewLogger(Config{Mode: "full", Branch: "test", NoColor: true}, testColors())
+	l, err := NewLogger(Config{Mode: "full", Branch: "test"}, testColors())
 	require.NoError(t, err)
 	defer func() { _ = l.Close() }()
-
-	// capture stdout
-	var buf bytes.Buffer
-	l.stdout = &buf
 
 	l.Print("test message %d", 42)
 
@@ -89,9 +83,6 @@ func TestLogger_Print(t *testing.T) {
 	content, err := os.ReadFile(l.Path())
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "test message 42")
-
-	// check stdout (no color)
-	assert.Contains(t, buf.String(), "test message 42")
 }
 
 func TestLogger_PrintRaw(t *testing.T) {
@@ -100,19 +91,15 @@ func TestLogger_PrintRaw(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { _ = os.Chdir(origDir) }()
 
-	l, err := NewLogger(Config{Mode: "full", Branch: "test", NoColor: true}, testColors())
+	l, err := NewLogger(Config{Mode: "full", Branch: "test"}, testColors())
 	require.NoError(t, err)
 	defer func() { _ = l.Close() }()
-
-	var buf bytes.Buffer
-	l.stdout = &buf
 
 	l.PrintRaw("raw output")
 
 	content, err := os.ReadFile(l.Path())
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "raw output")
-	assert.Contains(t, buf.String(), "raw output")
 }
 
 func TestLogger_PrintSection(t *testing.T) {
@@ -121,12 +108,9 @@ func TestLogger_PrintSection(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { _ = os.Chdir(origDir) }()
 
-	l, err := NewLogger(Config{Mode: "full", Branch: "test", NoColor: true}, testColors())
+	l, err := NewLogger(Config{Mode: "full", Branch: "test"}, testColors())
 	require.NoError(t, err)
 	defer func() { _ = l.Close() }()
-
-	var buf bytes.Buffer
-	l.stdout = &buf
 
 	section := processor.NewGenericSection("test section")
 	l.PrintSection(section)
@@ -134,7 +118,6 @@ func TestLogger_PrintSection(t *testing.T) {
 	content, err := os.ReadFile(l.Path())
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "--- test section ---")
-	assert.Contains(t, buf.String(), "--- test section ---")
 }
 
 func TestLogger_PrintAligned(t *testing.T) {
@@ -143,12 +126,9 @@ func TestLogger_PrintAligned(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { _ = os.Chdir(origDir) }()
 
-	l, err := NewLogger(Config{Mode: "full", Branch: "test", NoColor: true}, testColors())
+	l, err := NewLogger(Config{Mode: "full", Branch: "test"}, testColors())
 	require.NoError(t, err)
 	defer func() { _ = l.Close() }()
-
-	var buf bytes.Buffer
-	l.stdout = &buf
 
 	l.PrintAligned("first line\nsecond line\nthird line")
 
@@ -158,13 +138,6 @@ func TestLogger_PrintAligned(t *testing.T) {
 	assert.Contains(t, string(content), "] first line")
 	assert.Contains(t, string(content), "second line")
 	assert.Contains(t, string(content), "third line")
-
-	// check stdout output
-	output := buf.String()
-	assert.Contains(t, output, "first line")
-	assert.Contains(t, output, "second line")
-	// lines should end with newlines
-	assert.True(t, strings.HasSuffix(output, "\n"), "output should end with newline")
 }
 
 func TestLogger_PrintAligned_Empty(t *testing.T) {
@@ -173,16 +146,20 @@ func TestLogger_PrintAligned_Empty(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { _ = os.Chdir(origDir) }()
 
-	l, err := NewLogger(Config{Mode: "full", Branch: "test", NoColor: true}, testColors())
+	l, err := NewLogger(Config{Mode: "full", Branch: "test"}, testColors())
 	require.NoError(t, err)
 	defer func() { _ = l.Close() }()
 
-	var buf bytes.Buffer
-	l.stdout = &buf
+	// get file size before
+	info, err := os.Stat(l.Path())
+	require.NoError(t, err)
+	sizeBefore := info.Size()
 
 	l.PrintAligned("") // empty string should do nothing
 
-	assert.Empty(t, buf.String())
+	info, err = os.Stat(l.Path())
+	require.NoError(t, err)
+	assert.Equal(t, sizeBefore, info.Size(), "file should not grow for empty PrintAligned")
 }
 
 func TestLogger_Error(t *testing.T) {
@@ -191,19 +168,15 @@ func TestLogger_Error(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { _ = os.Chdir(origDir) }()
 
-	l, err := NewLogger(Config{Mode: "full", Branch: "test", NoColor: true}, testColors())
+	l, err := NewLogger(Config{Mode: "full", Branch: "test"}, testColors())
 	require.NoError(t, err)
 	defer func() { _ = l.Close() }()
-
-	var buf bytes.Buffer
-	l.stdout = &buf
 
 	l.Error("something failed: %s", "reason")
 
 	content, err := os.ReadFile(l.Path())
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "ERROR: something failed: reason")
-	assert.Contains(t, buf.String(), "ERROR: something failed: reason")
 }
 
 func TestLogger_Warn(t *testing.T) {
@@ -212,19 +185,15 @@ func TestLogger_Warn(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { _ = os.Chdir(origDir) }()
 
-	l, err := NewLogger(Config{Mode: "full", Branch: "test", NoColor: true}, testColors())
+	l, err := NewLogger(Config{Mode: "full", Branch: "test"}, testColors())
 	require.NoError(t, err)
 	defer func() { _ = l.Close() }()
-
-	var buf bytes.Buffer
-	l.stdout = &buf
 
 	l.Warn("warning message")
 
 	content, err := os.ReadFile(l.Path())
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "WARN: warning message")
-	assert.Contains(t, buf.String(), "WARN: warning message")
 }
 
 func TestLogger_SetPhase(t *testing.T) {
@@ -233,59 +202,25 @@ func TestLogger_SetPhase(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { _ = os.Chdir(origDir) }()
 
-	// enable colors for this test
-	origNoColor := color.NoColor
-	color.NoColor = false
-	defer func() { color.NoColor = origNoColor }()
-
 	l, err := NewLogger(Config{Mode: "full", Branch: "test"}, testColors())
 	require.NoError(t, err)
 	defer func() { _ = l.Close() }()
 
-	var buf bytes.Buffer
-	l.stdout = &buf
-
-	l.SetPhase(PhaseTask)
+	l.SetPhase(processor.PhaseTask)
 	l.Print("task output")
 
-	l.SetPhase(PhaseReview)
+	l.SetPhase(processor.PhaseReview)
 	l.Print("review output")
 
-	l.SetPhase(PhaseCodex)
+	l.SetPhase(processor.PhaseCodex)
 	l.Print("codex output")
 
-	output := buf.String()
-	// check for ANSI escape sequences (color codes start with \033[)
-	assert.Contains(t, output, "\033[")
-	assert.Contains(t, output, "task output")
-	assert.Contains(t, output, "review output")
-	assert.Contains(t, output, "codex output")
-}
-
-func TestLogger_ColorDisabled(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	require.NoError(t, os.Chdir(tmpDir))
-	defer func() { _ = os.Chdir(origDir) }()
-
-	// save original and restore after test
-	origNoColor := color.NoColor
-	defer func() { color.NoColor = origNoColor }()
-
-	l, err := NewLogger(Config{Mode: "full", Branch: "test", NoColor: true}, testColors())
+	content, err := os.ReadFile(l.Path())
 	require.NoError(t, err)
-	defer func() { _ = l.Close() }()
-
-	var buf bytes.Buffer
-	l.stdout = &buf
-
-	l.SetPhase(PhaseTask)
-	l.Print("no color output")
-
-	output := buf.String()
-	// should not contain ANSI escape sequences
-	assert.NotContains(t, output, "\033[")
-	assert.Contains(t, output, "no color output")
+	contentStr := string(content)
+	assert.Contains(t, contentStr, "task output")
+	assert.Contains(t, contentStr, "review output")
+	assert.Contains(t, contentStr, "codex output")
 }
 
 func TestLogger_Elapsed(t *testing.T) {
@@ -378,107 +313,6 @@ func TestSanitizePlanName(t *testing.T) {
 	}
 }
 
-func TestWrapText(t *testing.T) {
-	tests := []struct {
-		name  string
-		text  string
-		width int
-		want  string
-	}{
-		{
-			name:  "no wrap needed",
-			text:  "short text",
-			width: 80,
-			want:  "short text",
-		},
-		{
-			name:  "wraps at word boundary",
-			text:  "this is a longer text that needs wrapping",
-			width: 20,
-			want:  "this is a longer\ntext that needs\nwrapping",
-		},
-		{
-			name:  "single long word",
-			text:  "superlongwordthatcannotbewrapped",
-			width: 10,
-			want:  "superlongwordthatcannotbewrapped",
-		},
-		{
-			name:  "zero width returns original",
-			text:  "test text",
-			width: 0,
-			want:  "test text",
-		},
-		{
-			name:  "empty text",
-			text:  "",
-			width: 40,
-			want:  "",
-		},
-		{
-			name:  "exact fit",
-			text:  "exact fit",
-			width: 9,
-			want:  "exact fit",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := wrapText(tc.text, tc.width)
-			assert.Equal(t, tc.want, got)
-		})
-	}
-}
-
-func TestGetTerminalWidth(t *testing.T) {
-	// test with COLUMNS env var
-	t.Run("uses COLUMNS env var", func(t *testing.T) {
-		t.Setenv("COLUMNS", "100")
-		width := getTerminalWidth()
-		// should return 100 - 20 = 80
-		assert.Equal(t, 80, width)
-	})
-
-	t.Run("respects min width", func(t *testing.T) {
-		t.Setenv("COLUMNS", "50") // 50 - 20 = 30, but min is 40
-		width := getTerminalWidth()
-		assert.Equal(t, 40, width)
-	})
-
-	t.Run("invalid COLUMNS", func(t *testing.T) {
-		t.Setenv("COLUMNS", "invalid")
-		width := getTerminalWidth()
-		// should fall back to default or syscall result
-		assert.Positive(t, width)
-	})
-}
-
-func TestExtractSignal(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{"full signal", "<<<RALPHEX:ALL_TASKS_DONE>>>", "ALL_TASKS_DONE"},
-		{"codex review done", "<<<RALPHEX:CODEX_REVIEW_DONE>>>", "CODEX_REVIEW_DONE"},
-		{"review done", "<<<RALPHEX:REVIEW_DONE>>>", "REVIEW_DONE"},
-		{"task failed", "<<<RALPHEX:TASK_FAILED>>>", "TASK_FAILED"},
-		{"signal in text", "some text <<<RALPHEX:DONE>>> more text", "DONE"},
-		{"no signal", "regular text", ""},
-		{"incomplete prefix", "<<<RALPHEX:SIGNAL", ""},
-		{"incomplete suffix", "RALPHEX:SIGNAL>>>", ""},
-		{"empty", "", ""},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := extractSignal(tc.input)
-			assert.Equal(t, tc.want, got)
-		})
-	}
-}
-
 func TestIsListItem(t *testing.T) {
 	tests := []struct {
 		input string
@@ -542,15 +376,6 @@ func TestNewColors(t *testing.T) {
 		}
 		colors := NewColors(cfg)
 		assert.NotNil(t, colors)
-		assert.NotNil(t, colors.Info())
-		assert.NotNil(t, colors.Warn())
-		assert.NotNil(t, colors.Error())
-		assert.NotNil(t, colors.Signal())
-		assert.NotNil(t, colors.Timestamp())
-		assert.NotNil(t, colors.ForPhase(PhaseTask))
-		assert.NotNil(t, colors.ForPhase(PhaseReview))
-		assert.NotNil(t, colors.ForPhase(PhaseCodex))
-		assert.NotNil(t, colors.ForPhase(PhaseClaudeEval))
 	})
 
 	t.Run("panics on invalid task color", func(t *testing.T) {
@@ -584,43 +409,7 @@ func TestNewColors(t *testing.T) {
 	})
 }
 
-func TestColors_Methods(t *testing.T) {
-	colors := testColors()
-
-	t.Run("Info returns info color", func(t *testing.T) {
-		c := colors.Info()
-		assert.NotNil(t, c)
-	})
-
-	t.Run("Warn returns warn color", func(t *testing.T) {
-		c := colors.Warn()
-		assert.NotNil(t, c)
-	})
-
-	t.Run("Error returns error color", func(t *testing.T) {
-		c := colors.Error()
-		assert.NotNil(t, c)
-	})
-
-	t.Run("Signal returns signal color", func(t *testing.T) {
-		c := colors.Signal()
-		assert.NotNil(t, c)
-	})
-
-	t.Run("Timestamp returns timestamp color", func(t *testing.T) {
-		c := colors.Timestamp()
-		assert.NotNil(t, c)
-	})
-
-	t.Run("ForPhase returns phase colors", func(t *testing.T) {
-		assert.NotNil(t, colors.ForPhase(PhaseTask))
-		assert.NotNil(t, colors.ForPhase(PhaseReview))
-		assert.NotNil(t, colors.ForPhase(PhaseCodex))
-		assert.NotNil(t, colors.ForPhase(PhaseClaudeEval))
-	})
-}
-
-func TestParseColorOrPanic(t *testing.T) {
+func TestValidateColorOrPanic(t *testing.T) {
 	t.Run("valid colors", func(t *testing.T) {
 		tests := []struct {
 			name string
@@ -634,8 +423,7 @@ func TestParseColorOrPanic(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				assert.NotPanics(t, func() {
-					c := parseColorOrPanic(tc.s, "test")
-					assert.NotNil(t, c)
+					validateColorOrPanic(tc.s, "test")
 				})
 			})
 		}
@@ -664,7 +452,7 @@ func TestParseColorOrPanic(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				assert.Panics(t, func() {
-					parseColorOrPanic(tc.s, "test")
+					validateColorOrPanic(tc.s, "test")
 				})
 			})
 		}
@@ -677,12 +465,9 @@ func TestLogger_LogQuestion(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { _ = os.Chdir(origDir) }()
 
-	l, err := NewLogger(Config{Mode: "plan", PlanDescription: "test", Branch: "main", NoColor: true}, testColors())
+	l, err := NewLogger(Config{Mode: "plan", PlanDescription: "test", Branch: "main"}, testColors())
 	require.NoError(t, err)
 	defer func() { _ = l.Close() }()
-
-	var buf bytes.Buffer
-	l.stdout = &buf
 
 	l.LogQuestion("Which cache backend?", []string{"Redis", "In-memory", "File-based"})
 
@@ -692,11 +477,6 @@ func TestLogger_LogQuestion(t *testing.T) {
 	contentStr := string(content)
 	assert.Contains(t, contentStr, "QUESTION: Which cache backend?")
 	assert.Contains(t, contentStr, "OPTIONS: Redis, In-memory, File-based")
-
-	// check stdout output
-	output := buf.String()
-	assert.Contains(t, output, "QUESTION: Which cache backend?")
-	assert.Contains(t, output, "OPTIONS: Redis, In-memory, File-based")
 }
 
 func TestLogger_LogAnswer(t *testing.T) {
@@ -705,12 +485,9 @@ func TestLogger_LogAnswer(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { _ = os.Chdir(origDir) }()
 
-	l, err := NewLogger(Config{Mode: "plan", PlanDescription: "test", Branch: "main", NoColor: true}, testColors())
+	l, err := NewLogger(Config{Mode: "plan", PlanDescription: "test", Branch: "main"}, testColors())
 	require.NoError(t, err)
 	defer func() { _ = l.Close() }()
-
-	var buf bytes.Buffer
-	l.stdout = &buf
 
 	l.LogAnswer("Redis")
 
@@ -718,9 +495,6 @@ func TestLogger_LogAnswer(t *testing.T) {
 	content, err := os.ReadFile(l.Path())
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "ANSWER: Redis")
-
-	// check stdout output
-	assert.Contains(t, buf.String(), "ANSWER: Redis")
 }
 
 func TestLogger_PlanModeFilename(t *testing.T) {

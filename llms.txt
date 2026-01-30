@@ -22,7 +22,7 @@ brew install umputun/apps/ralphex
 # execute plan with task loop + reviews
 ralphex docs/plans/feature.md
 
-# select plan with fzf, or create one interactively if none exist
+# select plan interactively, or create one if none exist
 ralphex
 
 # review-only mode (skip task execution)
@@ -41,7 +41,6 @@ ralphex --reset
 ## Requirements
 
 - `claude` - Claude Code CLI (required)
-- `fzf` - for plan selection (optional)
 - `codex` - for external review (optional)
 
 ---

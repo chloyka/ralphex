@@ -139,7 +139,7 @@ The `--plan` flag provides a simpler integrated experience:
 ralphex --plan "add health check endpoint"
 ```
 
-Claude explores your codebase, asks clarifying questions via a terminal picker (fzf or numbered fallback), and generates a complete plan file in `docs/plans/`.
+Claude explores your codebase, asks clarifying questions via the built-in TUI option picker, and generates a complete plan file in `docs/plans/`.
 
 **Example session:**
 ```
@@ -189,7 +189,7 @@ Download the appropriate binary from [releases](https://github.com/umputun/ralph
 # execute plan with task loop + reviews
 ralphex docs/plans/feature.md
 
-# select plan with fzf, or create one interactively if none exist
+# select plan interactively, or create one if none exist
 ralphex
 
 # review-only mode (skip task execution)
@@ -337,7 +337,6 @@ Agents to launch:
 ## Requirements
 
 - `claude` - Claude Code CLI
-- `fzf` - for plan selection (optional)
 - `codex` - for external review (optional)
 
 ## Configuration

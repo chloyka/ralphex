@@ -4,15 +4,15 @@ package progress
 
 import "os"
 
-// lockFile is a no-op on Windows.
+// LockFile is a no-op on Windows.
 // Windows file locking would require LockFileEx which is more complex.
 // The lock is primarily used to detect active sessions, which is a secondary feature.
-func lockFile(_ *os.File) error {
+func LockFile(_ *os.File) error {
 	return nil
 }
 
-// unlockFile is a no-op on Windows.
-func unlockFile(_ *os.File) error {
+// UnlockFile is a no-op on Windows.
+func UnlockFile(_ *os.File) error {
 	return nil
 }
 

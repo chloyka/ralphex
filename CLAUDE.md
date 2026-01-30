@@ -23,7 +23,8 @@ pkg/config/         # configuration loading, defaults, prompts, agents
 pkg/executor/       # claude and codex CLI execution
 pkg/git/            # git operations using go-git library
 pkg/processor/      # orchestration loop, prompts, signals
-pkg/progress/       # timestamped logging with color
+pkg/progress/       # timestamped file logging, progress file management
+pkg/tui/            # Bubble Tea terminal UI (views, logger, input collector)
 pkg/web/            # web dashboard, SSE streaming, session management
 docs/plans/         # plan files location
 ```
@@ -52,7 +53,7 @@ The `--plan "description"` flag enables interactive plan creation:
 
 - Claude explores codebase and asks clarifying questions
 - Questions use QUESTION signal with JSON: `{"question": "...", "options": [...]}`
-- User answers via fzf picker (or numbered fallback)
+- User answers via TUI option picker
 - Q&A history stored in progress file for context
 - Loop continues until PLAN_READY signal
 - Plan file written to docs/plans/
@@ -60,9 +61,37 @@ The `--plan "description"` flag enables interactive plan creation:
 - If "Yes", creates branch and runs full execution mode on the new plan
 
 Key files:
-- `pkg/input/input.go` - terminal input collector (fzf/fallback)
+- `pkg/tui/input_collector.go` - TUI input collector (Bubble Tea)
+- `pkg/tui/plan_create.go` - plan description textarea view
 - `pkg/processor/signals.go` - QUESTION/PLAN_READY signal parsing
 - `pkg/config/defaults/prompts/make_plan.txt` - plan creation prompt
+
+### TUI Architecture (Bubble Tea)
+
+All terminal I/O goes through the Bubble Tea TUI (`pkg/tui/`). The TUI provides:
+- Plan selection with fuzzy filtering (replaces fzf subprocess)
+- Plan creation via textarea widget
+- Scrolling log viewport for streaming execution output
+- Question/answer prompts during plan creation mode
+- Status bar with phase, elapsed time, and plan name
+
+Key files in `pkg/tui/`:
+- `tui.go` - main Model with state machine (Init/Update/View), states: SelectPlan, CreatePlan, Executing, Question, Done
+- `messages.go` - all custom tea.Msg types (OutputMsg, PhaseChangeMsg, QuestionMsg, PlanSelectedMsg, etc.)
+- `styles.go` - lipgloss styles for colored terminal output
+- `logger.go` - teaLogger implementing processor.Logger (writes to file + sends tea.Msg); also defines `Sender` interface and `SafeSender` wrapper
+- `input_collector.go` - teaCollector implementing processor.InputCollector (question/answer and yes/no prompts via TUI)
+- `viewport.go` - viewport configuration, header/status bar rendering
+- `plan_list.go` - plan file list with bubbles/list component
+- `plan_create.go` - plan description textarea with bubbles/textarea component
+
+**TUI/business-logic coordination:**
+- `Sender` interface (`logger.go`) - abstraction for sending `tea.Msg` to the TUI program
+- `SafeSender` (`logger.go`) - wraps `Sender`, becomes a no-op after `Stop()` is called; prevents `p.Send()` from blocking after TUI exits (Ctrl+C). Created in `run()` (main.go) and passed to `runBusinessLogic`.
+- `runBusinessLogic` always sends `ExecutionDoneMsg` when done, using `SafeSender` so it's safe even after TUI quit
+- `teaCollector.AskYesNo()` (`input_collector.go`) - safe yes/no prompts with context cancellation; used instead of raw channel bridging
+
+Dependencies: `charmbracelet/bubbletea`, `charmbracelet/lipgloss`, `charmbracelet/bubbles`
 
 ## Platform Support
 

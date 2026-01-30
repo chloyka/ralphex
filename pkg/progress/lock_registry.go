@@ -10,15 +10,15 @@ var (
 	activeLocks   = make(map[string]struct{})
 )
 
-// registerActiveLock marks a progress file as locked by this process.
-func registerActiveLock(path string) {
+// RegisterActiveLock marks a progress file as locked by this process.
+func RegisterActiveLock(path string) {
 	activeLocksMu.Lock()
 	activeLocks[canonicalPath(path)] = struct{}{}
 	activeLocksMu.Unlock()
 }
 
-// unregisterActiveLock removes a progress file lock entry for this process.
-func unregisterActiveLock(path string) {
+// UnregisterActiveLock removes a progress file lock entry for this process.
+func UnregisterActiveLock(path string) {
 	activeLocksMu.Lock()
 	delete(activeLocks, canonicalPath(path))
 	activeLocksMu.Unlock()
